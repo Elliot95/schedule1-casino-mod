@@ -1,0 +1,9 @@
+{
+  "name": "CasinoExpansion",
+  "version_number": "0.1.0",
+  "website_url": "",
+  "description": "Adds new casino games to Schedule I. Work in progress - currently logs diagnostics only.",
+  "dependencies": [
+    "LavaGang-MelonLoader-0.7.3"
+  ]
+}
