@@ -16,15 +16,26 @@ namespace CasinoExpansion.Tweaks
         private static int _originalBlackjackMax = -1;
         private static int _originalRtbMax = -1;
 
+        // The game's static property holds only a raw pointer. If the interop wrapper is
+        // finalized the array can be collected underneath it, leaving the game reading freed
+        // memory on a later frame. Keeping a static reference pins it for the process lifetime.
+        private static Il2CppStructArray<int> _ladderRef;
+
         private static MelonPreferences_Entry<int> _extraSlotTiers;
         private static MelonPreferences_Entry<int> _tableMaxMultiplier;
-        private static MelonPreferences_Entry<bool> _enabled;
+        private static MelonPreferences_Entry<bool> _slotLadderEnabled;
+        private static MelonPreferences_Entry<bool> _tableLimitsEnabled;
 
         public static void InitPreferences()
         {
             var cat = MelonPreferences.CreateCategory("CasinoExpansion");
-            _enabled = cat.CreateEntry("RaiseBetLimits", true,
-                description: "Raise casino bet limits above vanilla.");
+
+            // Both default off: an earlier build crashed the game here and the cause is not yet
+            // confirmed, so raising limits is opt-in until each half is verified separately.
+            _slotLadderEnabled = cat.CreateEntry("RaiseSlotLadder", false,
+                description: "Append higher tiers to the slot bet ladder. UNVERIFIED - may crash.");
+            _tableLimitsEnabled = cat.CreateEntry("RaiseTableLimits", false,
+                description: "Raise Blackjack and Ride the Bus maximum bets. UNVERIFIED - may crash.");
             _extraSlotTiers = cat.CreateEntry("ExtraSlotTiers", 2,
                 description: "Extra slot bet tiers to append. 2 adds double and triple the vanilla max.");
             _tableMaxMultiplier = cat.CreateEntry("TableMaxBetMultiplier", 3,
@@ -33,14 +44,19 @@ namespace CasinoExpansion.Tweaks
 
         public static void Apply(System.Action<string> log, System.Action<string> warn)
         {
-            if (_enabled != null && !_enabled.Value)
+            bool slots = _slotLadderEnabled?.Value ?? false;
+            bool tables = _tableLimitsEnabled?.Value ?? false;
+
+            if (!slots && !tables)
             {
-                log("Bet limit changes disabled by config.");
+                log("Bet limit changes are off. Enable RaiseSlotLadder / RaiseTableLimits in MelonPreferences.cfg to test.");
                 return;
             }
 
-            ApplySlotLadder(log, warn);
-            ApplyTableMax(log, warn);
+            // Logged individually so that if the game dies again, the last line written names
+            // exactly which step was responsible.
+            if (slots) { log("step: slot ladder"); ApplySlotLadder(log, warn); log("step: slot ladder OK"); }
+            if (tables) { log("step: table limits"); ApplyTableMax(log, warn); log("step: table limits OK"); }
         }
 
         private static void ApplySlotLadder(System.Action<string> log, System.Action<string> warn)
@@ -60,9 +76,9 @@ namespace CasinoExpansion.Tweaks
                     .Concat(Enumerable.Range(2, extra).Select(m => baseMax * m))
                     .ToArray();
 
-                var replacement = new Il2CppStructArray<int>(ladder.Length);
-                for (int i = 0; i < ladder.Length; i++) replacement[i] = ladder[i];
-                Il2CppScheduleOne.Casino.SlotMachine.BetAmounts = replacement;
+                _ladderRef = new Il2CppStructArray<int>(ladder.Length);
+                for (int i = 0; i < ladder.Length; i++) _ladderRef[i] = ladder[i];
+                Il2CppScheduleOne.Casino.SlotMachine.BetAmounts = _ladderRef;
 
                 log($"Slot ladder: [{string.Join(", ", _originalSlotLadder)}] -> [{string.Join(", ", ladder)}]");
             }
@@ -75,23 +91,25 @@ namespace CasinoExpansion.Tweaks
 
             try
             {
+                log("  reading blackjack max...");
                 if (_originalBlackjackMax < 0)
                     _originalBlackjackMax = Il2CppScheduleOne.Casino.BlackjackGameController.MaximumBet;
+                log($"  blackjack max read = {_originalBlackjackMax}, writing...");
 
                 Il2CppScheduleOne.Casino.BlackjackGameController.MaximumBet = _originalBlackjackMax * mult;
-                log($"Blackjack max bet: {_originalBlackjackMax} -> {_originalBlackjackMax * mult} " +
-                    $"(min {Il2CppScheduleOne.Casino.BlackjackGameController.MinimumBet})");
+                log($"  blackjack max bet: {_originalBlackjackMax} -> {_originalBlackjackMax * mult}");
             }
             catch (System.Exception e) { warn($"blackjack max bet change failed: {e.Message}"); }
 
             try
             {
+                log("  reading ride the bus max...");
                 if (_originalRtbMax < 0)
                     _originalRtbMax = Il2CppScheduleOne.Casino.RTBGameController.MaximumBet;
+                log($"  ride the bus max read = {_originalRtbMax}, writing...");
 
                 Il2CppScheduleOne.Casino.RTBGameController.MaximumBet = _originalRtbMax * mult;
-                log($"Ride the Bus max bet: {_originalRtbMax} -> {_originalRtbMax * mult} " +
-                    $"(min {Il2CppScheduleOne.Casino.RTBGameController.MinimumBet})");
+                log($"  ride the bus max bet: {_originalRtbMax} -> {_originalRtbMax * mult}");
             }
             catch (System.Exception e) { warn($"ride the bus max bet change failed: {e.Message}"); }
         }
