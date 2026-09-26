@@ -8,10 +8,19 @@ namespace CasinoExpansion
 {
     public class Mod : MelonMod
     {
+        private readonly CasinoExpansion.Games.PrizeWheelGame _wheel = new CasinoExpansion.Games.PrizeWheelGame();
+
         public override void OnInitializeMelon()
         {
             Tweaks.BetLimits.InitPreferences();
-            LoggerInstance.Msg("CasinoExpansion loaded.");
+            CasinoExpansion.Games.PrizeWheelGame.InitPreferences(MelonPreferences.CreateCategory("CasinoExpansion"));
+            LoggerInstance.Msg("CasinoExpansion loaded. F9 moves the prize wheel to you.");
+        }
+
+        public override void OnUpdate()
+        {
+            if (Input.GetKeyDown(KeyCode.F9))
+                _wheel.Respawn();
         }
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
@@ -49,6 +58,9 @@ namespace CasinoExpansion
 
                     LoggerInstance.Msg("--- applying bet limit changes ---");
                     Tweaks.BetLimits.Apply(LoggerInstance.Msg, LoggerInstance.Warning);
+
+                    LoggerInstance.Msg("--- spawning prize wheel ---");
+                    _wheel.Spawn();
                     yield break;
                 }
                 yield return new WaitForSeconds(1f);
