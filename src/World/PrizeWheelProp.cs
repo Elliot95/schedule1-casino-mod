@@ -38,6 +38,33 @@ namespace CasinoExpansion.World
 
             AddPointer();
             AddBody();
+            AddReferenceMarker();
+            LogState();
+        }
+
+        // Deliberately untouched: default primitive, default mesh, default material. If this is
+        // visible and the wheel is not, the fault is in the custom mesh or material. If neither
+        // shows, the fault is placement or the scene. Remove once the wheel renders.
+        private void AddReferenceMarker()
+        {
+            var marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            marker.name = "ReferenceMarker";
+            marker.transform.SetParent(Root.transform, false);
+            marker.transform.localPosition = new Vector3(1.2f, 0f, 0f);
+            marker.transform.localScale = Vector3.one * 0.4f;
+            Object.Destroy(marker.GetComponent<Collider>());
+        }
+
+        private void LogState()
+        {
+            var r = _disc != null ? _disc.GetComponent<MeshRenderer>() : null;
+            var mf = _disc != null ? _disc.GetComponent<MeshFilter>() : null;
+
+            MelonLoader.MelonLogger.Msg(
+                $"[wheel] state: active={Root.activeInHierarchy} " +
+                $"worldPos={Root.transform.position} lossyScale={Root.transform.lossyScale} " +
+                $"discRenderer={(r == null ? "null" : $"enabled={r.enabled} visible={r.isVisible} bounds={r.bounds.size}")} " +
+                $"verts={(mf?.mesh == null ? -1 : mf.mesh.vertexCount)} tris={(mf?.mesh == null ? -1 : mf.mesh.triangles.Length / 3)}");
         }
 
         // Wheel needs a collider for the interaction raycast, on a layer inside
