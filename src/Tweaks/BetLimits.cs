@@ -24,34 +24,20 @@ namespace CasinoExpansion.Tweaks
         private static Il2CppStructArray<int> _ladderRef;
 
         private static MelonPreferences_Entry<int> _extraSlotTiers;
-        private static MelonPreferences_Entry<int> _tableMaxMultiplier;
         private static MelonPreferences_Entry<bool> _slotLadderEnabled;
-        private static MelonPreferences_Entry<bool> _tableLimitsEnabled;
-
-        // Read by the Harmony patches on every GetBetLimits call. 1 means leave vanilla alone.
-        public static int TableMultiplier =>
-            (_tableLimitsEnabled?.Value ?? false)
-                ? System.Math.Max(1, _tableMaxMultiplier?.Value ?? 1)
-                : 1;
 
         public static void InitPreferences()
         {
             var cat = MelonPreferences.CreateCategory("CasinoExpansion");
 
-            _slotLadderEnabled = cat.CreateEntry("RaiseSlotLadder", false,
+            _slotLadderEnabled = cat.CreateEntry("RaiseSlotLadder", true,
                 description: "Append higher tiers to the slot bet ladder.");
-            _tableLimitsEnabled = cat.CreateEntry("RaiseTableLimits", false,
-                description: "Raise Blackjack and Ride the Bus maximum bets.");
             _extraSlotTiers = cat.CreateEntry("ExtraSlotTiers", 2,
                 description: "Extra slot bet tiers to append. 2 adds double and triple the vanilla max.");
-            _tableMaxMultiplier = cat.CreateEntry("TableMaxBetMultiplier", 3,
-                description: "Multiplier applied to Blackjack and Ride the Bus maximum bets.");
         }
 
         public static void Apply(System.Action<string> log, System.Action<string> warn)
         {
-            log($"Table bet multiplier: x{TableMultiplier} (applied via GetBetLimits patch)");
-
             if (_slotLadderEnabled?.Value ?? false)
                 ApplySlotLadder(log, warn);
             else
@@ -85,23 +71,23 @@ namespace CasinoExpansion.Tweaks
         }
     }
 
-    [HarmonyPatch(typeof(Il2CppScheduleOne.Casino.BlackjackGameController),
-        nameof(Il2CppScheduleOne.Casino.BlackjackGameController.GetBetLimits))]
-    internal static class BlackjackBetLimitsPatch
-    {
-        private static void Postfix(ref float minimum, ref float maximum)
-        {
-            maximum *= BetLimits.TableMultiplier;
-        }
-    }
-
-    [HarmonyPatch(typeof(Il2CppScheduleOne.Casino.RTBGameController),
-        nameof(Il2CppScheduleOne.Casino.RTBGameController.GetBetLimits))]
-    internal static class RtbBetLimitsPatch
-    {
-        private static void Postfix(ref float minimum, ref float maximum)
-        {
-            maximum *= BetLimits.TableMultiplier;
-        }
-    }
 }
+
+// Table bet limits are deliberately NOT implemented.
+//
+// Two approaches have been tried and both failed:
+//
+// 1. Assigning BlackjackGameController.MaximumBet / RTBGameController.MaximumBet. These statics
+//    come from const fields. Il2CppInterop emits setters for them, but there is no writable
+//    storage behind the setter, so the write lands on invalid memory and hard-crashes the
+//    process. Reading them is fine. Do not trust a static setter in these interop assemblies.
+//
+// 2. A Harmony postfix on GetBetLimits(out float minimum, out float maximum), multiplying the
+//    maximum. This compiled and ran, but left the in-game bet slider pinned at zero and
+//    undraggable -- Harmony's by-ref parameter binding on Il2Cpp methods does not appear to
+//    marshal these out params correctly, so the postfix wrote zeros over the real limits.
+//    Note the config toggle did not protect against this: the patch applies at load and ran
+//    even when the multiplier was 1.
+//
+// A third route, not yet attempted: leave GetBetLimits alone and instead adjust whatever UI
+// component configures the bet slider's range. That needs the bet-entry UI mapped first.
