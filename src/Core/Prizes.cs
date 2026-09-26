@@ -4,28 +4,43 @@ namespace CasinoExpansion.Core
     // off a live save: slot ladder 5/10/25/50/100, Blackjack and Ride the Bus 10-1000 with a 1:1
     // payout and 3:2 on blackjack.
     //
-    // HOUSE EDGE, deliberate -- change the rank bands below to retune, and nothing else:
-    //   per 13 ranks: Ace 3x (1), K/Q/J 2x (3), 10/9/8 1x (3), 7..2 0x (6)
-    //   sum = 3 + 6 + 3 + 0 = 12 over 13 cards  ->  0.923x average on a card slice
-    //   over all 53 slices (the grand prize slice pays no cash) -> 48/53 = ~0.906
-    // So roughly a 9% cash edge, partly given back by the grand prize item once per ~53 spins.
-    // That sits well below a real-world money wheel (~11%) and above vanilla blackjack.
+    // RTP is meant to track the slot machines, rounded DOWN so the wheel is never the better bet.
+    // The slots' win table is native and unreadable, so it is measured empirically at startup by
+    // SlotRtp and logged next to ExpectedRtp() below -- compare the two and retune the rank bands
+    // here if they have drifted apart.
+    //
+    // Current table, per 52 card slices plus the grand prize slice which pays no cash:
+    //   2 red Aces at 10x = 20, 2 black Aces at 3x = 6, 12 K/Q/J at 2x = 24, rest 0
+    //   total 50 over 53 slices -> ~94.3%
+    // The grand prize item is on top of that, so true player return is a little higher.
     public static class Prizes
     {
-        // Ranks are 1..13 with Ace low. Multiplier is applied to the stake and INCLUDES it,
-        // so 0 means the stake is lost and 1 means it is returned.
+        // Multiplier is applied to the stake and INCLUDES it, so 0 means the stake is lost and 1
+        // means it is returned. Ranks are 1..13 with Ace low; suits are 0 Spades, 1 Hearts,
+        // 2 Diamonds, 3 Clubs.
         public static float CashMultiplier(int slice)
         {
             if (slice == PrizeWheelSlices.GrandPrize) return 0f;
 
-            int rank = Card.FromIndex(slice).Rank;
-            return rank switch
+            var card = Card.FromIndex(slice);
+            bool red = card.Suit == 1 || card.Suit == 2;
+
+            return card.Rank switch
             {
-                1 => 3f,                        // Ace
+                1 when red => 10f,              // the two red Aces are the jackpot slices
+                1 => 3f,                        // black Aces
                 13 or 12 or 11 => 2f,           // King, Queen, Jack
-                10 or 9 or 8 => 1f,
-                _ => 0f,                        // 7 down to 2
+                _ => 0f,
             };
+        }
+
+        // Computed rather than asserted, so the log can show what the table actually returns and
+        // it can be compared against the measured slot RTP instead of assumed to match.
+        public static float ExpectedRtp()
+        {
+            float total = 0f;
+            for (int i = 0; i < PrizeWheelSlices.Count; i++) total += CashMultiplier(i);
+            return total / PrizeWheelSlices.Count;
         }
 
         // Grand prize item pool. Every id was verified present in Registry on a live save.

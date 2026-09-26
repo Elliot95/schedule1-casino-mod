@@ -40,6 +40,12 @@ namespace CasinoExpansion.Probe
 
                 foreach (var m in machines)
                     log($"   {m.name}: current={m.currentBetAmount} spinning={m.IsSpinning}");
+
+                var slotRtp = SlotRtp.Measure(200_000, log, warn);
+                log($"-- Wheel RTP (table): {Core.Prizes.ExpectedRtp():P2}" +
+                    (slotRtp.HasValue
+                        ? $"  vs slots {slotRtp.Value:P2}  -> wheel is {(Core.Prizes.ExpectedRtp() <= slotRtp.Value ? "at or below" : "ABOVE")} slots"
+                        : "  (slot RTP unavailable)"));
             }
             catch (Exception e) { warn($"slot probe failed: {e.Message}"); }
         }
