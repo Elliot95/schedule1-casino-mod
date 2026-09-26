@@ -24,16 +24,18 @@ namespace CasinoExpansion.World
             clone.transform.localPosition = Vector3.zero;
             clone.transform.localRotation = Quaternion.identity;
 
-            // The donor's own scripts and event wiring come along with the clone -- without
-            // stripping them, clicking the wheel would also try to open a door.
-            StripDonorBehaviour(clone, log);
-
             var io = clone.GetComponent<IntObj>();
             if (io == null) { warn("cloned object had no InteractableObject"); Object.Destroy(clone); return null; }
 
-            io.onInteractStart.RemoveAllListeners();
-            io.onInteractEnd.RemoveAllListeners();
-            io.onHovered.RemoveAllListeners();
+            LogComponents(clone, log);
+
+            // RemoveAllListeners only clears runtime listeners. The donor's persistent
+            // (editor-wired) listeners survive cloning and still target the ORIGINAL door, which
+            // sits outside the cloned hierarchy -- so without disabling them, interacting with
+            // this prop would also operate that door.
+            MuteInherited(io.onInteractStart);
+            MuteInherited(io.onInteractEnd);
+            MuteInherited(io.onHovered);
 
             io.onInteractStart.AddListener(onInteract);
             io.SetMessage(hoverMessage);
@@ -42,18 +44,22 @@ namespace CasinoExpansion.World
             return io;
         }
 
-        private static void StripDonorBehaviour(GameObject clone, System.Action<string> log)
+        private static void MuteInherited(UnityEvent evt)
         {
-            var kept = "";
-            foreach (var c in clone.GetComponents<MonoBehaviour>().ToArray())
-            {
-                var name = c.GetType().Name;
-                if (name == nameof(IntObj)) { kept += name + " "; continue; }
+            if (evt == null) return;
+            evt.RemoveAllListeners();
+            for (int i = 0; i < evt.GetPersistentEventCount(); i++)
+                evt.SetPersistentListenerState(i, UnityEventCallState.Off);
+        }
 
-                Object.Destroy(c);
-                log($"   stripped donor component: {name}");
-            }
-            log($"   kept: {kept.Trim()}");
+        // GetType() on an Il2Cpp component reports "MonoBehaviour" rather than the real type, so
+        // never identify components by that name -- an earlier version did and deleted the
+        // InteractableObject it was trying to keep. GetIl2CppType() gives the true name.
+        private static void LogComponents(GameObject clone, System.Action<string> log)
+        {
+            var names = clone.GetComponents<MonoBehaviour>()
+                .Select(c => c.GetIl2CppType().Name);
+            log($"   donor components: [{string.Join(", ", names)}]");
         }
     }
 }
