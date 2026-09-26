@@ -67,10 +67,16 @@ namespace CasinoExpansion.Games
             forward.y = 0f;
             forward = forward.sqrMagnitude < 0.01f ? Vector3.forward : forward.normalized;
 
-            // Deliberately high and close: spawning 2m ahead at waist height kept putting the
-            // prop inside whatever the player was facing, which looks identical to a rendering
-            // bug. Against open sky there is nothing that can hide it.
-            var pos = player.position + forward * 1.5f + Vector3.up * 3f;
+            var pos = player.position + forward * 1.6f + Vector3.up * 1.2f;
+
+            // Spawning into a wall looks exactly like a rendering bug, which cost a lot of time
+            // to rule out once. If the spot is occupied, pull it back toward the player.
+            if (Physics.CheckSphere(pos, 0.7f))
+            {
+                pos = player.position + forward * 0.9f + Vector3.up * 1.4f;
+                MelonLogger.Msg("[wheel] spawn point was obstructed, placed closer instead");
+            }
+
             return (pos, Quaternion.LookRotation(-forward, Vector3.up));
         }
 

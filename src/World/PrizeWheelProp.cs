@@ -40,7 +40,6 @@ namespace CasinoExpansion.World
 
             AddPointer();
             AddBody();
-            AddReferenceMarker();
 
             // Layer 0 (Default) casts shadows but never rendered -- the camera's culling mask
             // does not include it. Door is known good: visible in game and inside
@@ -79,20 +78,6 @@ namespace CasinoExpansion.World
             }
         }
 
-        // Deliberately untouched: default primitive, default mesh, default material. If this is
-        // visible and the wheel is not, the fault is in the custom mesh or material. If neither
-        // shows, the fault is placement or the scene. Remove once the wheel renders.
-        private void AddReferenceMarker()
-        {
-            var marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            marker.name = "ReferenceMarker";
-            marker.transform.SetParent(Root.transform, false);
-            marker.transform.localPosition = new Vector3(1.2f, 0f, 0f);
-            marker.transform.localScale = Vector3.one * 0.4f;
-            Object.Destroy(marker.GetComponent<Collider>());
-            ApplyGameShader(marker.GetComponent<MeshRenderer>());
-        }
-
         private void LogState()
         {
             var r = _disc != null ? _disc.GetComponent<MeshRenderer>() : null;
@@ -114,7 +99,7 @@ namespace CasinoExpansion.World
             body.name = "Body";
             body.transform.SetParent(Root.transform, false);
             body.transform.localPosition = new Vector3(0f, -0.15f, 0.06f);
-            body.transform.localScale = new Vector3(1.25f, 1.6f, 0.12f);
+            body.transform.localScale = new Vector3(1.15f, 1.15f, 0.08f);
 
             var col = body.GetComponent<BoxCollider>();
             col.isTrigger = false;
@@ -250,9 +235,11 @@ namespace CasinoExpansion.World
                 if (ang < 0f) ang += 360f;
                 int slice = (int)(ang / 360f * SliceCount) % SliceCount;
 
+                // Alternating rather than per-suit: suits are contiguous in the deck, so colouring
+                // by suit produced one 26-slice red block and read as a blob, not a wheel.
                 Color c = slice == GrandPrizeSlice
                     ? gold
-                    : (Card.FromIndex(slice).Suit is 1 or 2 ? red : black);
+                    : (slice % 2 == 0 ? red : black);
 
                 // Thin dark divider at each wedge boundary.
                 float within = ang / 360f * SliceCount - slice;
