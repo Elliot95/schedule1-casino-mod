@@ -1,77 +1,111 @@
+using System;
+using System.Linq;
+
 namespace CasinoExpansion.Core
 {
-    // Payouts are tuned against the vanilla casino rather than invented. Reference points read
-    // off a live save: slot ladder 5/10/25/50/100, Blackjack and Ride the Bus 10-1000 with a 1:1
-    // payout and 3:2 on blackjack.
+    // The wheel is calibrated at runtime to match the slot machines' measured return, rather than
+    // carrying hardcoded payouts. Vanilla slots measure ~132% RTP -- they pay out more than they
+    // take -- so a hand-picked table would have been far off without anyone noticing.
     //
-    // RTP is meant to track the slot machines, rounded DOWN so the wheel is never the better bet.
-    // The slots' win table is native and unreadable, so it is measured empirically at startup by
-    // SlotRtp and logged next to ExpectedRtp() below -- compare the two and retune the rank bands
-    // here if they have drifted apart.
+    // The grand prize item counts toward that return: it has a real cash value, so awarding it
+    // without budgeting for it would silently push the wheel well above target. Its value is read
+    // from the registry and subtracted from the budget before the cash slices are scaled, which
+    // is what forces the losing slices to carry the difference.
     //
-    // Current table, per 52 card slices plus the grand prize slice which pays no cash:
-    //   2 red Aces at 10x = 20, 2 black Aces at 3x = 6, 12 K/Q/J at 2x = 24, rest 0
-    //   total 50 over 53 slices -> ~94.3%
-    // The grand prize item is on top of that, so true player return is a little higher.
+    // Everything is floored, never rounded up, so the wheel lands at or below the slots.
     public static class Prizes
     {
-        // Multiplier is applied to the stake and INCLUDES it, so 0 means the stake is lost and 1
-        // means it is returned. Ranks are 1..13 with Ace low; suits are 0 Spades, 1 Hearts,
-        // 2 Diamonds, 3 Clubs.
-        public static float CashMultiplier(int slice)
+        // Relative weights, not final multipliers. Scaled at calibration to hit the budget.
+        private const float RedAceWeight = 10f;
+        private const float BlackAceWeight = 3f;
+        private const float FaceWeight = 2f;
+
+        // Grand prize is a flat cash multiplier for now. Item prizes are a later conversation;
+        // their value has to be budgeted the same way this multiplier is.
+        public const int GrandPrizeMultiplier = 100;
+
+        private static int[] _table;
+
+        // Weight of the non-grand slices only; the grand prize is fixed, not scaled.
+        private static float BaseWeight(int slice)
         {
-            if (slice == PrizeWheelSlices.GrandPrize) return 0f;
+            if (!PrizeWheelSlices.IsCard(slice)) return 0f;   // jackpot and blanks are not scaled
 
             var card = Card.FromIndex(slice);
             bool red = card.Suit == 1 || card.Suit == 2;
 
             return card.Rank switch
             {
-                1 when red => 10f,              // the two red Aces are the jackpot slices
-                1 => 3f,                        // black Aces
-                13 or 12 or 11 => 2f,           // King, Queen, Jack
+                1 when red => RedAceWeight,
+                1 => BlackAceWeight,
+                13 or 12 or 11 => FaceWeight,
                 _ => 0f,
             };
         }
 
-        // Computed rather than asserted, so the log can show what the table actually returns and
-        // it can be compared against the measured slot RTP instead of assumed to match.
-        public static float ExpectedRtp()
+        public static void Calibrate(float stake, float targetRtp, Action<string> log, Action<string> warn)
         {
-            float total = 0f;
-            for (int i = 0; i < PrizeWheelSlices.Count; i++) total += CashMultiplier(i);
-            return total / PrizeWheelSlices.Count;
+            // Pick the smallest wheel whose jackpot share lands at or under target -- flooring
+            // the RTP rather than rounding it up, so the wheel never beats the slots.
+            int count = PrizeWheelSlices.MinCount;
+            while (targetRtp > 0f && (float)GrandPrizeMultiplier / count > targetRtp) count++;
+            PrizeWheelSlices.SetCount(count);
+
+            _table = new int[count];
+            _table[PrizeWheelSlices.GrandPrize] = GrandPrizeMultiplier;
+
+            float grandRtp = (float)GrandPrizeMultiplier / count;
+            float cashBudget = targetRtp - grandRtp;
+
+            log($"-- Wheel calibration: target {targetRtp:P2}, {GrandPrizeMultiplier}x jackpot " +
+                $"diluted across {count} slices = {grandRtp:P2}, leaving {cashBudget:P2}");
+
+            float rawRtp = Enumerable.Range(0, count).Sum(BaseWeight) / count;
+            float scale = rawRtp <= 0f ? 0f : cashBudget / rawRtp;
+
+            for (int i = 0; i < count; i++)
+                if (i != PrizeWheelSlices.GrandPrize)
+                    _table[i] = (int)Math.Floor(BaseWeight(i) * scale);
+
+            int paying = _table.Count(m => m > 0);
+            log($"-- Wheel table: {count} slices, {paying} paying, jackpot {GrandPrizeMultiplier}x, " +
+                $"card scale x{scale:0.##}. Total RTP {TotalRtp():P2}");
         }
 
-        // Grand prize item pool. Every id was verified present in Registry on a live save.
-        // Chosen from the round seed so all clients agree without extra replication.
-        private static readonly string[] ItemPool =
+        public static float CashMultiplier(int slice)
         {
-            "goldbar", "goldwatch", "goldchain", "silverwatch", "silverchain",
-        };
-
-        public static string GrandPrizeItemId(int seed)
-        {
-            uint s = seed == 0 ? 1u : (uint)seed;
-            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
-            return ItemPool[s % (uint)ItemPool.Length];
+            if (_table == null) return 0f;                       // uncalibrated: pay nothing
+            return slice >= 0 && slice < _table.Length ? _table[slice] : 0f;
         }
+
+        public static float CashRtp() =>
+            _table == null || _table.Length == 0 ? 0f : (float)_table.Sum() / _table.Length;
+
+        public static float TotalRtp() => CashRtp();
 
         public static string Describe(int slice, float stake)
         {
-            if (slice == PrizeWheelSlices.GrandPrize) return "GRAND PRIZE";
+            if (slice == PrizeWheelSlices.GrandPrize) return $"GRAND PRIZE - {GrandPrizeMultiplier}x ({stake * GrandPrizeMultiplier:0.##})";
 
-            var card = Card.FromIndex(slice);
             float mult = CashMultiplier(slice);
-            return mult <= 0f
-                ? $"{card} - no win"
-                : $"{card} - {mult:0.##}x ({stake * mult:0.##})";
+            string label = PrizeWheelSlices.IsCard(slice) ? Card.FromIndex(slice).ToString() : "blank";
+            return mult <= 0f ? $"{label} - no win" : $"{label} - {mult:0.##}x ({stake * mult:0.##})";
         }
     }
 
     public static class PrizeWheelSlices
     {
-        public const int Count = 53;
-        public const int GrandPrize = 52;
+        public const int CardCount = 52;          // slices 0..51 map to a card
+        public const int GrandPrize = 52;         // slice 52 is the jackpot
+        public const int MinCount = 53;
+
+        // Slices beyond the cards and the jackpot are plain losers. Their only job is to dilute
+        // the jackpot: a fixed 100x on 1 of 53 is 189% RTP, so the wheel needs more slices, not
+        // smaller payouts, to come back under target.
+        public static int Count { get; private set; } = MinCount;
+
+        public static void SetCount(int count) => Count = Math.Max(MinCount, count);
+
+        public static bool IsCard(int slice) => slice >= 0 && slice < CardCount;
     }
 }

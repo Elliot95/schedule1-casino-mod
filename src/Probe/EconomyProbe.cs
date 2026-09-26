@@ -41,11 +41,14 @@ namespace CasinoExpansion.Probe
                 foreach (var m in machines)
                     log($"   {m.name}: current={m.currentBetAmount} spinning={m.IsSpinning}");
 
+                // Calibrated against the measured slots rather than a guess, because the vanilla
+                // machines turn out to return well over 100% and no hand-picked table would have
+                // landed near that by accident.
                 var slotRtp = SlotRtp.Measure(200_000, log, warn);
-                log($"-- Wheel RTP (table): {Core.Prizes.ExpectedRtp():P2}" +
-                    (slotRtp.HasValue
-                        ? $"  vs slots {slotRtp.Value:P2}  -> wheel is {(Core.Prizes.ExpectedRtp() <= slotRtp.Value ? "at or below" : "ABOVE")} slots"
-                        : "  (slot RTP unavailable)"));
+                Core.Prizes.Calibrate(Games.PrizeWheelGame.Stake, slotRtp ?? 1f, log, warn);
+
+                log($"-- Wheel vs slots: {Core.Prizes.TotalRtp():P2} vs {slotRtp:P2} -> " +
+                    $"{(slotRtp.HasValue && Core.Prizes.TotalRtp() <= slotRtp.Value ? "at or below" : "ABOVE")}");
             }
             catch (Exception e) { warn($"slot probe failed: {e.Message}"); }
         }

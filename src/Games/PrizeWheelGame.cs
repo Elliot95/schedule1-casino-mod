@@ -27,6 +27,9 @@ namespace CasinoExpansion.Games
                 description: "Cash staked per spin.");
         }
 
+        // Calibration needs the stake before any round runs.
+        public static float Stake => System.Math.Max(1f, _stake?.Value ?? 10f);
+
         public bool IsSpawned => _prop.Root != null;
 
         public void Spawn()
@@ -39,7 +42,7 @@ namespace CasinoExpansion.Games
             var (pos, rot) = ResolvePlacement(player.transform);
             _prop.Build(pos, rot);
 
-            InteractableFactory.Attach(_prop.Root, "Spin the wheel",
+            InteractableFactory.Attach(_prop.Root, "Spin the wheel", new Vector3(1.3f, 1.3f, 0.4f),
                 (UnityAction)OnInteract, MelonLogger.Msg, MelonLogger.Warning);
 
             MelonLogger.Msg($"[wheel] spawned at {pos.x:0.##},{pos.y:0.##},{pos.z:0.##} " +
@@ -99,7 +102,7 @@ namespace CasinoExpansion.Games
             _busy = true;
             _round++;
 
-            float stake = Mathf.Max(1f, _stake?.Value ?? 10f);
+            float stake = Stake;
 
             if (!Bank.TryTakeBet(GameId, _round, stake))
             {
@@ -117,50 +120,17 @@ namespace CasinoExpansion.Games
             MelonLogger.Msg($"[wheel] round {_round} spinning (seed {seed}, slice {slice})");
             yield return _prop.Spin(slice);
 
-            Resolve(slice, seed, stake);
+            Resolve(slice, stake);
             _busy = false;
         }
 
-        private void Resolve(int slice, int seed, float stake)
+        private void Resolve(int slice, float stake)
         {
             MelonLogger.Msg($"[wheel] round {_round} result: {Prizes.Describe(slice, stake)}");
 
             float mult = Prizes.CashMultiplier(slice);
             if (mult > 0f) Bank.ApplyPayout(GameId, _round, stake * mult);
-
-            if (slice == PrizeWheelSlices.GrandPrize) AwardGrandPrize(seed);
         }
 
-        private static void AwardGrandPrize(int seed)
-        {
-            var id = Prizes.GrandPrizeItemId(seed);
-            try
-            {
-                if (!Il2CppScheduleOne.Registry.ItemExists(id))
-                {
-                    MelonLogger.Warning($"[wheel] prize id '{id}' not in Registry, skipping award");
-                    return;
-                }
-
-                var instance = Il2CppScheduleOne.Registry.GetItem(id).GetDefaultInstance(1);
-                var inventory = Il2CppScheduleOne.PlayerScripts.PlayerInventory.Instance;
-
-                if (inventory == null) { MelonLogger.Warning("[wheel] no PlayerInventory"); return; }
-
-                // Checked first, because a full inventory would otherwise swallow the item.
-                if (!inventory.CanItemFitInInventory(instance, 1))
-                {
-                    MelonLogger.Warning($"[wheel] no inventory room for '{id}' - prize lost");
-                    return;
-                }
-
-                inventory.AddItemToInventory(instance);
-                MelonLogger.Msg($"[wheel] awarded grand prize: {id}");
-            }
-            catch (System.Exception e)
-            {
-                MelonLogger.Error($"[wheel] grand prize award failed for '{id}': {e.Message}");
-            }
-        }
     }
 }

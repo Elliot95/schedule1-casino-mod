@@ -11,7 +11,7 @@ namespace CasinoExpansion.World
     // null-refs on hover, so the only safe way to get one at runtime is to clone a live instance.
     public static class InteractableFactory
     {
-        public static IntObj Attach(GameObject target, string hoverMessage,
+        public static IntObj Attach(GameObject target, string hoverMessage, Vector3 colliderSize,
             UnityAction onInteract, System.Action<string> log, System.Action<string> warn)
         {
             var donor = Object.FindObjectsOfType<Il2CppScheduleOne.Doors.StaticDoor>()
@@ -40,6 +40,13 @@ namespace CasinoExpansion.World
             io.onInteractStart.AddListener(onInteract);
             io.SetMessage(hoverMessage);
             io.MaxInteractionRange = 3f;
+
+            // The interaction raycast resolves an InteractableObject from the collider it hits,
+            // searching upward. A collider on a sibling object is therefore never found, so the
+            // collider has to live on this same GameObject.
+            var col = clone.AddComponent<BoxCollider>();
+            col.size = colliderSize;
+            col.isTrigger = false;
 
             return io;
         }

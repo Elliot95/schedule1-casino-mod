@@ -10,10 +10,12 @@ namespace CasinoExpansion.World
     // of interop pitfalls. Animation is driven by a MelonCoroutine instead.
     public sealed class PrizeWheelProp
     {
-        public const int SliceCount = 53;          // 52 cards + grand prize
-        public const int GrandPrizeSlice = 52;
+        // Slice count is decided at calibration, not fixed here: the jackpot is diluted by
+        // adding losing slices, so the wheel's geometry has to follow whatever that produced.
+        private static int SliceCount => Core.PrizeWheelSlices.Count;
+        private static int GrandPrizeSlice => Core.PrizeWheelSlices.GrandPrize;
 
-        private const int Segments = 212;          // 4 per slice, so wedge edges land exactly
+        private static int Segments => SliceCount * 4;   // whole slices, so wedge edges land exactly
         private const int TextureSize = 256;
 
         public GameObject Root { get; private set; }
@@ -101,9 +103,7 @@ namespace CasinoExpansion.World
             body.transform.localPosition = new Vector3(0f, -0.15f, 0.06f);
             body.transform.localScale = new Vector3(1.15f, 1.15f, 0.08f);
 
-            var col = body.GetComponent<BoxCollider>();
-            col.isTrigger = false;
-            col.size = new Vector3(1.1f, 1.2f, 2.5f);
+            Object.Destroy(body.GetComponent<Collider>());
 
             var bodyRenderer = body.GetComponent<MeshRenderer>();
             ApplyGameShader(bodyRenderer);
@@ -171,14 +171,15 @@ namespace CasinoExpansion.World
 
         private static Mesh BuildDisc()
         {
-            var verts = new Vector3[Segments + 1];
-            var uvs = new Vector2[Segments + 1];
+            int segments = Segments;
+            var verts = new Vector3[segments + 1];
+            var uvs = new Vector2[segments + 1];
             verts[0] = Vector3.zero;
             uvs[0] = new Vector2(0.5f, 0.5f);
 
-            for (int i = 0; i < Segments; i++)
+            for (int i = 0; i < segments; i++)
             {
-                float a = i / (float)Segments * Mathf.PI * 2f;
+                float a = i / (float)segments * Mathf.PI * 2f;
                 float x = Mathf.Cos(a), y = Mathf.Sin(a);
                 verts[i + 1] = new Vector3(x * 0.5f, y * 0.5f, 0f);
                 uvs[i + 1] = new Vector2(0.5f + x * 0.5f, 0.5f + y * 0.5f);
@@ -187,16 +188,16 @@ namespace CasinoExpansion.World
             // Double-sided on purpose. A single-sided disc is invisible from behind while still
             // casting a shadow, which is exactly how the first version failed -- building both
             // faces removes any dependence on getting the winding or facing direction right.
-            var tris = new int[Segments * 6];
-            for (int i = 0; i < Segments; i++)
+            var tris = new int[segments * 6];
+            for (int i = 0; i < segments; i++)
             {
-                int a = i + 1, b = (i + 1) % Segments + 1;
+                int a = i + 1, b = (i + 1) % segments + 1;
 
                 tris[i * 3] = 0;
                 tris[i * 3 + 1] = a;
                 tris[i * 3 + 2] = b;
 
-                int back = Segments * 3 + i * 3;
+                int back = segments * 3 + i * 3;
                 tris[back] = 0;
                 tris[back + 1] = b;
                 tris[back + 2] = a;
@@ -233,16 +234,18 @@ namespace CasinoExpansion.World
 
                 float ang = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
                 if (ang < 0f) ang += 360f;
-                int slice = (int)(ang / 360f * SliceCount) % SliceCount;
+                int sliceCount = SliceCount;
+                int slice = (int)(ang / 360f * sliceCount) % sliceCount;
 
-                // Alternating rather than per-suit: suits are contiguous in the deck, so colouring
-                // by suit produced one 26-slice red block and read as a blob, not a wheel.
+                // Only the jackpot pays on the current table, so paying slices are marked red
+                // and everything that loses stays black -- the face should not promise wins the
+                // table does not actually hand out.
                 Color c = slice == GrandPrizeSlice
                     ? gold
-                    : (slice % 2 == 0 ? red : black);
+                    : (Core.Prizes.CashMultiplier(slice) > 0f ? red : black);
 
                 // Thin dark divider at each wedge boundary.
-                float within = ang / 360f * SliceCount - slice;
+                float within = ang / 360f * sliceCount - slice;
                 if (within < 0.04f || within > 0.96f) c = rim;
 
                 tex.SetPixel(px, py, c);
