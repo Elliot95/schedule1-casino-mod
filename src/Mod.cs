@@ -43,6 +43,7 @@ namespace CasinoExpansion
                 if (Core.Bank.TryGetCashBalance(out var balance))
                 {
                     LoggerInstance.Msg($"Money ready after {Time.realtimeSinceStartup - start:0.0}s. Cash: {balance:0.##}");
+                    Probe.EconomyProbe.Run(LoggerInstance.Msg, LoggerInstance.Warning);
                     yield break;
                 }
                 yield return new WaitForSeconds(1f);
