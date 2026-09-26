@@ -39,7 +39,34 @@ namespace CasinoExpansion.World
             AddPointer();
             AddBody();
             AddReferenceMarker();
+
+            // Layer 0 (Default) casts shadows but never rendered -- the camera's culling mask
+            // does not include it. Door is known good: visible in game and inside
+            // InteractionManager's search mask, so the prop stays clickable.
+            SetLayerRecursive(Root, RenderLayer);
+
+            LogCameras();
             LogState();
+        }
+
+        private const int RenderLayer = 18;   // Door
+
+        private static void SetLayerRecursive(GameObject go, int layer)
+        {
+            go.layer = layer;
+            for (int i = 0; i < go.transform.childCount; i++)
+                SetLayerRecursive(go.transform.GetChild(i).gameObject, layer);
+        }
+
+        private static void LogCameras()
+        {
+            foreach (var cam in Object.FindObjectsOfType<Camera>())
+            {
+                int mask = cam.cullingMask;
+                MelonLoader.MelonLogger.Msg(
+                    $"[wheel] camera '{cam.name}' enabled={cam.enabled} mask=0x{mask:X8} " +
+                    $"default={(mask & 1) != 0} door={(mask & (1 << 18)) != 0}");
+            }
         }
 
         // Deliberately untouched: default primitive, default mesh, default material. If this is
@@ -77,7 +104,6 @@ namespace CasinoExpansion.World
             body.transform.SetParent(Root.transform, false);
             body.transform.localPosition = new Vector3(0f, -0.15f, 0.06f);
             body.transform.localScale = new Vector3(1.25f, 1.6f, 0.12f);
-            body.layer = 0;
 
             var col = body.GetComponent<BoxCollider>();
             col.isTrigger = false;
