@@ -10,6 +10,7 @@ namespace CasinoExpansion
     {
         public override void OnInitializeMelon()
         {
+            Tweaks.BetLimits.InitPreferences();
             LoggerInstance.Msg("CasinoExpansion loaded.");
         }
 
@@ -43,7 +44,11 @@ namespace CasinoExpansion
                 if (Core.Bank.TryGetCashBalance(out var balance))
                 {
                     LoggerInstance.Msg($"Money ready after {Time.realtimeSinceStartup - start:0.0}s. Cash: {balance:0.##}");
+                    LoggerInstance.Msg("--- vanilla economy (before changes) ---");
                     Probe.EconomyProbe.Run(LoggerInstance.Msg, LoggerInstance.Warning);
+
+                    LoggerInstance.Msg("--- applying bet limit changes ---");
+                    Tweaks.BetLimits.Apply(LoggerInstance.Msg, LoggerInstance.Warning);
                     yield break;
                 }
                 yield return new WaitForSeconds(1f);
