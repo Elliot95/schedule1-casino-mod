@@ -67,7 +67,10 @@ namespace CasinoExpansion.Games
             forward.y = 0f;
             forward = forward.sqrMagnitude < 0.01f ? Vector3.forward : forward.normalized;
 
-            var pos = player.position + forward * 2f + Vector3.up * 0.9f;
+            // Deliberately high and close: spawning 2m ahead at waist height kept putting the
+            // prop inside whatever the player was facing, which looks identical to a rendering
+            // bug. Against open sky there is nothing that can hide it.
+            var pos = player.position + forward * 1.5f + Vector3.up * 3f;
             return (pos, Quaternion.LookRotation(-forward, Vector3.up));
         }
 

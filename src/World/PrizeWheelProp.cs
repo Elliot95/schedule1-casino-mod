@@ -33,7 +33,9 @@ namespace CasinoExpansion.World
             Object.Destroy(host.GetComponent<Collider>());
 
             host.GetComponent<MeshFilter>().mesh = BuildDisc();
-            SetTexture(host.GetComponent<MeshRenderer>().material, BuildFaceTexture());
+            var discRenderer = host.GetComponent<MeshRenderer>();
+            ApplyGameShader(discRenderer);
+            SetTexture(discRenderer.material, BuildFaceTexture());
             _disc = host.transform;
 
             AddPointer();
@@ -46,7 +48,15 @@ namespace CasinoExpansion.World
             SetLayerRecursive(Root, RenderLayer);
 
             LogCameras();
-            LogState();
+            MelonLoader.MelonCoroutines.Start(LogStateAfterCulling());
+        }
+
+        // isVisible is only meaningful once culling has run, so reading it in the same frame the
+        // object is created always reports false and proves nothing.
+        private IEnumerator LogStateAfterCulling()
+        {
+            yield return new WaitForSeconds(1f);
+            if (Root != null) LogState();
         }
 
         private const int RenderLayer = 18;   // Door
@@ -80,6 +90,7 @@ namespace CasinoExpansion.World
             marker.transform.localPosition = new Vector3(1.2f, 0f, 0f);
             marker.transform.localScale = Vector3.one * 0.4f;
             Object.Destroy(marker.GetComponent<Collider>());
+            ApplyGameShader(marker.GetComponent<MeshRenderer>());
         }
 
         private void LogState()
@@ -109,11 +120,43 @@ namespace CasinoExpansion.World
             col.isTrigger = false;
             col.size = new Vector3(1.1f, 1.2f, 2.5f);
 
-            SetColor(body.GetComponent<MeshRenderer>().material, new Color(0.35f, 0.05f, 0.08f));
+            var bodyRenderer = body.GetComponent<MeshRenderer>();
+            ApplyGameShader(bodyRenderer);
+            SetColor(bodyRenderer.material, new Color(0.35f, 0.05f, 0.08f));
         }
 
-        // Built-in and URP use different property names, and setting the wrong one silently does
-        // nothing -- so set whichever the material actually has.
+        // GameObject.CreatePrimitive hands back a built-in "Standard" material. If the game runs
+        // a scriptable render pipeline, that shader has no valid camera pass, so the object
+        // renders nothing while its ShadowCaster pass still works -- shadows on the ground and
+        // no visible geometry, which is exactly what happened. Borrowing a shader from something
+        // the game actually draws sidesteps guessing which pipeline this is.
+        private static Shader _gameShader;
+
+        private static Shader GameShader()
+        {
+            if (_gameShader != null) return _gameShader;
+
+            foreach (var r in Object.FindObjectsOfType<MeshRenderer>())
+            {
+                var m = r.sharedMaterial;
+                if (m == null || m.shader == null) continue;
+                if (m.shader.name == "Standard") continue;   // the one we know does not draw
+
+                _gameShader = m.shader;
+                MelonLoader.MelonLogger.Msg($"[wheel] harvested shader '{_gameShader.name}' from '{r.name}'");
+                return _gameShader;
+            }
+
+            MelonLoader.MelonLogger.Warning("[wheel] found no non-Standard shader to harvest");
+            return null;
+        }
+
+        private static void ApplyGameShader(Renderer renderer)
+        {
+            var shader = GameShader();
+            if (shader != null) renderer.material.shader = shader;
+        }
+
         private static void SetColor(Material m, Color c)
         {
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
@@ -136,7 +179,9 @@ namespace CasinoExpansion.World
             pointer.transform.localPosition = new Vector3(0f, 0.56f, -0.03f);
             pointer.transform.localScale = new Vector3(0.05f, 0.14f, 0.05f);
             Object.Destroy(pointer.GetComponent<Collider>());
-            SetColor(pointer.GetComponent<MeshRenderer>().material, new Color(0.98f, 0.88f, 0.35f));
+            var pointerRenderer = pointer.GetComponent<MeshRenderer>();
+            ApplyGameShader(pointerRenderer);
+            SetColor(pointerRenderer.material, new Color(0.98f, 0.88f, 0.35f));
         }
 
         private static Mesh BuildDisc()
