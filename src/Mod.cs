@@ -21,25 +21,34 @@ namespace CasinoExpansion
                 ProbeGameApis();
         }
 
-        // Phase 0 validation: confirms the APIs the whole design depends on are reachable at runtime.
         private void ProbeGameApis()
         {
-            try
-            {
-                var mm = Il2CppScheduleOne.Money.MoneyManager.Instance;
-                LoggerInstance.Msg(mm != null
-                    ? $"MoneyManager reachable. Cash balance: {mm.cashBalance}"
-                    : "MoneyManager.Instance was null.");
-            }
-            catch (System.Exception e)
-            {
-                LoggerInstance.Warning($"MoneyManager probe failed: {e.Message}");
-            }
-
             LogFound<Il2CppScheduleOne.Casino.BlackjackGameController>("BlackjackGameController");
             LogFound<Il2CppScheduleOne.Casino.CasinoGamePlayers>("CasinoGamePlayers");
             LogFound<Il2CppScheduleOne.Casino.CardController>("CardController");
             LogFound<Il2CppScheduleOne.Casino.SlotMachine>("SlotMachine");
+
+            MelonCoroutines.Start(WaitForMoney());
+        }
+
+        // Cash is unreadable at scene-init and only becomes valid once save data lands.
+        // Timing it tells us how long after load a bet can safely be accepted.
+        private System.Collections.IEnumerator WaitForMoney()
+        {
+            const float timeout = 60f;
+            var start = Time.realtimeSinceStartup;
+
+            while (Time.realtimeSinceStartup - start < timeout)
+            {
+                if (Core.Bank.TryGetCashBalance(out var balance))
+                {
+                    LoggerInstance.Msg($"Money ready after {Time.realtimeSinceStartup - start:0.0}s. Cash: {balance:0.##}");
+                    yield break;
+                }
+                yield return new WaitForSeconds(1f);
+            }
+
+            LoggerInstance.Warning($"Money still unreadable after {timeout}s.");
         }
 
         private void LogFound<T>(string label) where T : Object

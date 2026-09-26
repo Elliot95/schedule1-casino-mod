@@ -53,8 +53,13 @@
     </Reference>
   </ItemGroup>
 
+  <!-- The running game holds a lock on the deployed DLL, so this is expected to fail
+       mid-session. Fail fast rather than retrying ten times. -->
   <Target Name="DeployToMods" AfterTargets="Build">
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)\Mods" ContinueOnError="true" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)\Mods"
+          Retries="0" ContinueOnError="WarnAndContinue" />
+    <Warning Condition="!Exists('$(GameDir)\Mods\$(AssemblyName).dll')"
+             Text="Not deployed to Mods - close the game and rebuild." />
   </Target>
 
 </Project>

@@ -10,19 +10,31 @@ namespace CasinoExpansion.Core
     {
         private static readonly HashSet<string> Applied = new HashSet<string>();
 
-        public static float CashBalance
+        // cashBalance reads through cashInstance, which stays null until save data has
+        // populated -- it throws, rather than returning 0, if touched too early.
+        public static bool TryGetCashBalance(out float balance)
         {
-            get
+            balance = 0f;
+            try
             {
                 var mm = Il2CppScheduleOne.Money.MoneyManager.Instance;
-                return mm == null ? 0f : mm.cashBalance;
+                if (mm == null) return false;
+                balance = mm.cashBalance;
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
+
+        public static bool IsReady => TryGetCashBalance(out _);
 
         public static bool TryTakeBet(string gameId, int round, float amount)
         {
             if (amount <= 0f) return false;
-            if (CashBalance < amount) return false;
+            if (!TryGetCashBalance(out var balance)) return false;
+            if (balance < amount) return false;
             return Apply($"{gameId}:{round}:bet", -amount, "bet");
         }
 
@@ -55,7 +67,8 @@ namespace CasinoExpansion.Core
             }
 
             mm.ChangeCashBalance(delta, true, true);
-            MelonLogger.Msg($"[Bank] {key} delta={delta:+0.##;-0.##} balance={CashBalance:0.##}");
+            TryGetCashBalance(out var after);
+            MelonLogger.Msg($"[Bank] {key} delta={delta:+0.##;-0.##} balance={after:0.##}");
             return true;
         }
 
