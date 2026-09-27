@@ -18,7 +18,7 @@ namespace CasinoExpansion.Casino
         private readonly string _gameId;
         private int _round;
         private bool _dealing;
-        private float _resultUntil;
+        private bool _dealtThisReady;
 
         public string LastResult { get; private set; } = "";
         public float Stake { get; set; } = 10f;
@@ -51,8 +51,18 @@ namespace CasinoExpansion.Casino
             var game = TableGames.For(id);
             if (game == null) return;                       // vanilla, or a game not yet written
 
-            if (!AllReady() || !Consensus(id)) return;
+            // One round per ready-up. Vanilla leaves the ready flag set after a hand resolves,
+            // so without this the next tick deals again immediately -- an endless loop taking a
+            // stake every couple of seconds.
+            if (!AllReady())
+            {
+                _dealtThisReady = false;
+                return;
+            }
 
+            if (_dealtThisReady || !Consensus(id)) return;
+
+            _dealtThisReady = true;
             MelonCoroutines.Start(RunRound(game));
         }
 
@@ -119,8 +129,16 @@ namespace CasinoExpansion.Casino
             var hands = new HandSet();
             game.Deal(hands, new Deck(seed));
 
-            LastResult = $"{game.Title}: dealing...";
-            yield return new WaitForSeconds(1.2f);
+            LastResult = $"<b>{game.Title}</b>\nDealing...";
+            yield return new WaitForSeconds(0.8f);
+
+            // Reveal the hands before the verdict, so a round reads as a hand of cards rather
+            // than a number appearing out of nowhere.
+            var reveal = new System.Text.StringBuilder($"<b>{game.Title}</b>\n");
+            foreach (var hand in hands.Hands)
+                reveal.AppendLine($"{hand.Name}: {hand}");
+            LastResult = reveal.ToString();
+            yield return new WaitForSeconds(1.4f);
 
             var outcome = game.Resolve(hands, stake);
             if (outcome.Multiplier > 0f) Bank.ApplyPayout(_gameId, _round, stake * outcome.Multiplier);
@@ -132,11 +150,10 @@ namespace CasinoExpansion.Casino
 
             MelonLogger.Msg($"[session] round {_round} seed {seed}: {outcome.Summary} -> x{outcome.Multiplier}");
 
-            _resultUntil = Time.realtimeSinceStartup + 6f;
-            yield return new WaitForSeconds(2f);
+            yield return new WaitForSeconds(1f);
             _dealing = false;
         }
 
-        public bool HasFreshResult => Time.realtimeSinceStartup < _resultUntil;
+        public bool HasFreshResult => !string.IsNullOrEmpty(LastResult);
     }
 }
