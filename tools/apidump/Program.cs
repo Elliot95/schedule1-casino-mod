@@ -28,6 +28,28 @@ class Program
         catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray(); }
         Console.WriteLine($"Types readable: {types.Length}\n");
 
+        // "member:Foo" finds which type declares a member, which is otherwise guesswork when all
+        // you have is a field name pulled out of the binary.
+        var memberQuery = args.FirstOrDefault(a => a.StartsWith("member:"));
+        if (memberQuery != null)
+        {
+            var needle = memberQuery.Substring("member:".Length).ToLowerInvariant();
+            const BindingFlags MF = BindingFlags.Public | BindingFlags.NonPublic
+                                  | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+            foreach (var t in types)
+            {
+                string[] hits;
+                try
+                {
+                    hits = t.GetMembers(MF).Select(m => m.Name)
+                            .Where(n => n.ToLowerInvariant().Contains(needle)).Distinct().ToArray();
+                }
+                catch { continue; }
+                if (hits.Length > 0) Console.WriteLine($"{t.FullName}: {string.Join(", ", hits.Take(8))}");
+            }
+            return 0;
+        }
+
         foreach (var name in args.Length > 0 ? args : Defaults)
         {
             var t = types.FirstOrDefault(x => x.FullName == name)
