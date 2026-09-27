@@ -16,13 +16,17 @@ namespace CasinoExpansion
             var cat = MelonPreferences.CreateCategory("CasinoExpansion");
             CasinoExpansion.Games.PrizeWheelGame.InitPreferences(cat);
             Tweaks.CasinoHours.InitPreferences(cat);
-            LoggerInstance.Msg("CasinoExpansion loaded. F9 moves the prize wheel to you.");
+            LoggerInstance.Msg("CasinoExpansion loaded. F9 moves the prize wheel to you, F10 scans for casino staff.");
         }
 
         public override void OnUpdate()
         {
             if (Input.GetKeyDown(KeyCode.F9))
                 _wheel.Respawn();
+
+            // On demand, because the startup scan fires before NPCs have finished spawning.
+            if (Input.GetKeyDown(KeyCode.F10))
+                Probe.CasinoStaff.Run(LoggerInstance.Msg, LoggerInstance.Warning);
         }
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)

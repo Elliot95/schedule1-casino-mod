@@ -27,20 +27,21 @@ namespace CasinoExpansion.Probe
                 log($"[staff] casino centre ~{centre}, from {anchors.Length} anchors");
 
                 var npcs = Object.FindObjectsOfType<Il2CppScheduleOne.NPCs.NPC>();
-                log($"[staff] {npcs.Length} NPCs in scene; those within 30m of the casino:");
 
-                var near = npcs
+                // No distance cap: an earlier run capped at 30m and, because it fired seconds
+                // after load before NPCs had finished spawning, reported whoever happened to
+                // exist rather than the actual casino staff. Nearest-first tells the truth.
+                var ranked = npcs
                     .Select(n => (npc: n, dist: Vector3.Distance(n.transform.position, centre)))
-                    .Where(x => x.dist <= 30f)
                     .OrderBy(x => x.dist)
                     .ToArray();
 
-                if (near.Length == 0) log("   none — the casino appears to be unstaffed");
-
-                foreach (var (npc, dist) in near.Take(15))
+                log($"[staff] {npcs.Length} NPCs in scene; nearest 15 to the casino:");
+                foreach (var (npc, dist) in ranked.Take(15))
                 {
-                    var hasDialogue = npc.GetComponentInChildren<Il2CppScheduleOne.Dialogue.DialogueHandler>(true) != null;
-                    log($"   {npc.name} at {dist:0.#}m  dialogue={hasDialogue}");
+                    var handler = npc.GetComponentInChildren<Il2CppScheduleOne.Dialogue.DialogueHandler>(true);
+                    var id = string.IsNullOrEmpty(npc.FirstName) ? npc.name : $"{npc.FirstName} {npc.LastName}".Trim();
+                    log($"   {id}  [{npc.name}]  {dist:0.#}m  dialogue={handler != null}");
                 }
             }
             catch (Exception e) { warn($"[staff] probe failed: {e.Message}"); }
