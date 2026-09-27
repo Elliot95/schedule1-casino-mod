@@ -61,7 +61,7 @@ namespace CasinoExpansion.World
             // InteractionManager's search mask, so the prop stays clickable.
             SetLayerRecursive(Root, RenderLayer);
 
-            Effects.Build(Root.transform, new Vector3(0f, -1.12f, 0.03f),
+            Effects.Build(Root.transform, new Vector3(0f, -1.12f, 0.03f), 1.40f,
                 MelonLoader.MelonLogger.Msg, MelonLoader.MelonLogger.Warning);
 
             LogCameras();
@@ -334,8 +334,8 @@ namespace CasinoExpansion.World
             var bezel = GameObject.CreatePrimitive(PrimitiveType.Cube);
             bezel.name = "ControlBezel";
             bezel.transform.SetParent(Root.transform, false);
-            bezel.transform.localPosition = new Vector3(0f, ControlsY + 0.10f, -0.02f);
-            bezel.transform.localScale = new Vector3(0.86f, 0.46f, 0.06f);
+            bezel.transform.localPosition = new Vector3(0f, ControlsY + 0.08f, -0.015f);
+            bezel.transform.localScale = new Vector3(1.14f, 0.74f, 0.05f);
             Object.Destroy(bezel.GetComponent<Collider>());
 
             var renderer = bezel.GetComponent<MeshRenderer>();
@@ -344,29 +344,65 @@ namespace CasinoExpansion.World
         }
 
 
-        // Shows the stake, and the win when a round resolves. Font is borrowed from one already
-        // loaded by the game so the text matches the rest of the UI.
+        private Il2CppTMPro.TextMeshPro _betLabel;
+
+        // Modelled on the slot machines' own screen: an inset panel with a lit border, a small
+        // persistent bet figure and a larger win figure, rather than one multipurpose line.
         private void AddReadout()
         {
-            var go = new GameObject("Readout");
-            go.transform.SetParent(Root.transform, false);
-            go.transform.localPosition = new Vector3(0f, ControlsY, -0.06f);
+            MakePanel("ScreenBorder", new Vector3(0.94f, 0.50f, 0.05f),
+                new Vector3(0f, ControlsY + 0.07f, -0.03f), new Color(0.55f, 0.42f, 0.10f));
+            MakePanel("Screen", new Vector3(0.88f, 0.44f, 0.05f),
+                new Vector3(0f, ControlsY + 0.07f, -0.04f), new Color(0.03f, 0.03f, 0.04f));
 
-            _readout = go.AddComponent<Il2CppTMPro.TextMeshPro>();
-            _readout.fontSize = 1.5f;
-            _readout.alignment = Il2CppTMPro.TextAlignmentOptions.Center;
-            _readout.color = new Color(0.98f, 0.88f, 0.35f);
-            _readout.rectTransform.sizeDelta = new Vector2(0.5f, 0.18f);
+            var font = BorrowSlotFont();
 
-            var font = Resources.FindObjectsOfTypeAll<Il2CppTMPro.TMP_FontAsset>().FirstOrDefault();
-            if (font != null) _readout.font = font;
+            _readout = MakeLabel("WinLabel", new Vector3(0f, ControlsY + 0.13f, -0.05f), 0.62f, font,
+                new Color(0.99f, 0.86f, 0.26f));
+            _betLabel = MakeLabel("BetLabel", new Vector3(0f, ControlsY - 0.02f, -0.05f), 0.34f, font,
+                new Color(0.75f, 0.75f, 0.80f));
 
             SetText("");
+        }
+
+        // The slot machine's own label font, so the numbers match the machines beside it.
+        private static Il2CppTMPro.TMP_FontAsset BorrowSlotFont()
+        {
+            var slot = Object.FindObjectOfType<Il2CppScheduleOne.Casino.SlotMachine>();
+            if (slot?.BetAmountLabel?.font != null) return slot.BetAmountLabel.font;
+            return Resources.FindObjectsOfTypeAll<Il2CppTMPro.TMP_FontAsset>().FirstOrDefault();
+        }
+
+        private Il2CppTMPro.TextMeshPro MakeLabel(string name, Vector3 pos, float size,
+            Il2CppTMPro.TMP_FontAsset font, Color colour)
+        {
+            var go = new GameObject(name);
+            var label = go.AddComponent<Il2CppTMPro.TextMeshPro>();
+
+            // Sits between the board and the buttons, so an overlong figure slides behind them
+            // rather than overlapping. Wrapping off keeps it on one line whatever the amount.
+            label.fontSize = size;
+            label.alignment = Il2CppTMPro.TextAlignmentOptions.Center;
+            label.enableWordWrapping = false;
+            label.overflowMode = Il2CppTMPro.TextOverflowModes.Overflow;
+            label.color = colour;
+            if (font != null) label.font = font;
+
+            label.rectTransform.SetParent(null, false);
+            go.transform.SetParent(Root.transform, false);
+            go.transform.localPosition = pos;
+            label.rectTransform.sizeDelta = new Vector2(0.84f, 0.16f);
+            return label;
         }
 
         public void SetText(string text)
         {
             if (_readout != null) _readout.text = text;
+        }
+
+        public void SetBet(string text)
+        {
+            if (_betLabel != null) _betLabel.text = text;
         }
 
         // A real button on the front, sat directly above the stake strip, replacing the slot
@@ -376,7 +412,7 @@ namespace CasinoExpansion.World
             var button = GameObject.CreatePrimitive(PrimitiveType.Cube);
             button.name = "SpinButton";
             button.transform.SetParent(Root.transform, false);
-            button.transform.localPosition = new Vector3(0f, ControlsY + 0.20f, -0.06f);
+            button.transform.localPosition = new Vector3(0f, ControlsY + 0.30f, -0.07f);
             button.transform.localScale = new Vector3(0.34f, 0.11f, 0.05f);
             Object.Destroy(button.GetComponent<Collider>());
 
@@ -391,7 +427,7 @@ namespace CasinoExpansion.World
             var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
             pad.name = name;
             pad.transform.SetParent(Root.transform, false);
-            pad.transform.localPosition = new Vector3(x, ControlsY, -0.055f);
+            pad.transform.localPosition = new Vector3(x, ControlsY - 0.02f, -0.07f);
             pad.transform.localScale = new Vector3(0.13f, 0.11f, 0.05f);
             Object.Destroy(pad.GetComponent<Collider>());
 

@@ -14,7 +14,10 @@ namespace CasinoExpansion.World
         private ParticleSystem[] _jackpotParticles;
         private Audio _miniWin, _bigWin, _jackpot, _spinLoop;
 
-        public void Build(Transform parent, Vector3 emitterLocalPos, System.Action<string> log, System.Action<string> warn)
+        private const int Copies = 5;      // five times the donor's emitter count
+
+        public void Build(Transform parent, Vector3 emitterLocalPos, float barWidth,
+            System.Action<string> log, System.Action<string> warn)
         {
             var donor = Object.FindObjectOfType<Slot>();
             if (donor == null) { warn("[fx] no SlotMachine to borrow effects from"); return; }
@@ -27,15 +30,22 @@ namespace CasinoExpansion.World
             var source = donor.JackpotParticles;
             if (source == null || source.Length == 0) { warn("[fx] donor had no jackpot particles"); return; }
 
-            _jackpotParticles = new ParticleSystem[source.Length];
-            for (int i = 0; i < source.Length; i++)
+            // Every donor emitter is cloned several times and the whole set spread evenly across
+            // the bar, so confetti erupts along its full width rather than from one or two points.
+            int total = source.Length * Copies;
+            _jackpotParticles = new ParticleSystem[total];
+
+            for (int i = 0; i < total; i++)
             {
-                var clone = Object.Instantiate(source[i].gameObject, parent);
+                var clone = Object.Instantiate(source[i % source.Length].gameObject, parent);
                 clone.name = $"JackpotParticles{i}";
 
-                // Emitters sit low and behind the concealing bar, so bursts rise from behind the
-                // machine rather than appearing out of a visible point in mid-air.
-                clone.transform.localPosition = emitterLocalPos + new Vector3((i - (source.Length - 1) * 0.5f) * 0.35f, 0f, 0f);
+                float t = total == 1 ? 0.5f : i / (float)(total - 1);
+                float x = Mathf.Lerp(-barWidth * 0.5f, barWidth * 0.5f, t);
+
+                // Low and behind the concealing bar, so bursts rise from behind the machine
+                // rather than appearing out of a visible point in mid-air.
+                clone.transform.localPosition = emitterLocalPos + new Vector3(x, 0f, 0f);
                 clone.transform.localRotation = Quaternion.identity;
 
                 _jackpotParticles[i] = clone.GetComponent<ParticleSystem>();

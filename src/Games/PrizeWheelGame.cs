@@ -60,7 +60,7 @@ namespace CasinoExpansion.Games
             InteractableFactory.Attach(_prop.BetDownAnchor, "Lower bet", new Vector3(1.2f, 1.4f, 1.2f),
                 (UnityAction)(() => ChangeBet(-1)), MelonLogger.Msg, MelonLogger.Warning);
 
-            _prop.SetText($"${Stake:N0}");
+            _prop.SetBet($"BET ${Stake:N0}");
             MelonLogger.Msg($"[wheel] spawned at {pos.x:0.##},{pos.y:0.##},{pos.z:0.##} " +
                             $"(player at {player.transform.position.x:0.##},{player.transform.position.y:0.##},{player.transform.position.z:0.##})");
         }
@@ -118,7 +118,7 @@ namespace CasinoExpansion.Games
 
             _betIndex = next;
             _spinInteractable?.SetMessage(SpinMessage());
-            _prop.SetText($"${Stake:N0}");
+            _prop.SetBet($"BET ${Stake:N0}");
             MelonLogger.Msg($"[wheel] bet now {Stake:N0}");
         }
 
@@ -158,7 +158,7 @@ namespace CasinoExpansion.Games
             }
 
             MelonLogger.Msg($"[wheel] round {_round} spinning (seed {seed}, slice {slice})");
-            _prop.SetText("...");
+            _prop.SetText("SPINNING");
             _prop.Effects.OnSpinStart();
             yield return _prop.Spin(slice);
             _prop.Effects.OnSpinEnd();
@@ -174,7 +174,7 @@ namespace CasinoExpansion.Games
             float mult = Prizes.CashMultiplier(slice);
             if (mult > 0f) Bank.ApplyPayout(GameId, _round, stake * mult);
 
-            _prop.SetText(mult > 0f ? $"WON ${stake * mult:N0}" : $"${Stake:N0}");
+            _prop.SetText(mult > 0f ? $"${stake * mult:N0}" : "NO WIN");
             _prop.Effects.OnResult(slice == PrizeWheelSlices.GrandPrize, mult);
         }
 
