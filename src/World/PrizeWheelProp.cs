@@ -53,8 +53,8 @@ namespace CasinoExpansion.World
             AddControlBezel();
             AddReadout();
             SpinButtonAnchor = AddSpinButton();
-            BetUpAnchor = AddBetPad("BetUp", 0.30f, new Color(0.25f, 0.62f, 0.28f));
-            BetDownAnchor = AddBetPad("BetDown", -0.30f, new Color(0.62f, 0.25f, 0.25f));
+            BetUpAnchor = AddBetPad("BetUp", 0.30f, new Color(0.25f, 0.62f, 0.28f), "+");
+            BetDownAnchor = AddBetPad("BetDown", -0.30f, new Color(0.62f, 0.25f, 0.25f), "−");
 
             // Layer 0 (Default) casts shadows but never rendered -- the camera's culling mask
             // does not include it. Door is known good: visible in game and inside
@@ -348,7 +348,7 @@ namespace CasinoExpansion.World
 
         private const float ScreenTextZ = -0.085f;   // in front of the screen panel
         private const float ButtonZ = -0.11f;        // in front of the text, so figures slide behind
-        private const float ButtonTextZ = -0.135f;   // on the face of the button
+        private const float ButtonTextZ = -0.152f;   // clear of the button's front face at -0.135
 
         // Modelled on the slot machines' own screen: an inset panel with a lit border, a small
         // persistent bet figure and a larger win figure, rather than one multipurpose line.
@@ -378,7 +378,7 @@ namespace CasinoExpansion.World
         }
 
         private Il2CppTMPro.TextMeshPro MakeLabel(string name, Vector3 pos, float size,
-            Il2CppTMPro.TMP_FontAsset font, Color colour)
+            Il2CppTMPro.TMP_FontAsset font, Color colour, Vector2? size2d = null)
         {
             // Parent first, then add the component. Creating it detached and reparenting the
             // RectTransform afterwards left the labels invisible.
@@ -394,7 +394,7 @@ namespace CasinoExpansion.World
             label.overflowMode = Il2CppTMPro.TextOverflowModes.Overflow;
             label.color = colour;
             if (font != null) label.font = font;
-            label.rectTransform.sizeDelta = new Vector2(0.84f, 0.18f);
+            label.rectTransform.sizeDelta = size2d ?? new Vector2(0.84f, 0.18f);
             return label;
         }
 
@@ -423,12 +423,12 @@ namespace CasinoExpansion.World
             ApplyGameShader(renderer);
             SetColor(renderer.material, new Color(0.85f, 0.65f, 0.12f));
 
-            _betLabel = MakeLabel("BetLabel", new Vector3(0f, ControlsY + 0.30f, ButtonTextZ), 0.7f,
-                BorrowSlotFont(), new Color(0.12f, 0.08f, 0.02f));
+            _betLabel = MakeLabel("BetLabel", new Vector3(0f, ControlsY + 0.30f, ButtonTextZ), 0.5f,
+                BorrowSlotFont(), new Color(0.10f, 0.07f, 0.02f), new Vector2(0.44f, 0.13f));
             return button;
         }
 
-        private GameObject AddBetPad(string name, float x, Color colour)
+        private GameObject AddBetPad(string name, float x, Color colour, string symbol)
         {
             var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
             pad.name = name;
@@ -440,6 +440,10 @@ namespace CasinoExpansion.World
             var renderer = pad.GetComponent<MeshRenderer>();
             ApplyGameShader(renderer);
             SetColor(renderer.material, colour);
+
+            var label = MakeLabel($"{name}Symbol", new Vector3(x, ControlsY - 0.10f, ButtonTextZ),
+                0.75f, BorrowSlotFont(), Color.white, new Vector2(0.16f, 0.14f));
+            label.text = symbol;
             return pad;
         }
 
