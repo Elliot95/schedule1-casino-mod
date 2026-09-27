@@ -39,6 +39,32 @@ namespace CasinoExpansion.Tweaks
                 description: "DIAGNOSTIC. Writes MaximumBet back unchanged to find out whether the write itself crashes. May crash the game.");
         }
 
+        // The experiment the whole multiplayer design hangs on. FishNet ServerRpcs default to
+        // RequireOwnership = true, and CasinoGamePlayers is a scene object nobody owns -- if the
+        // weaver kept that default, every client call is dropped and the transport does not
+        // exist. Run from a NON-HOST client and watch the host console for a "not the owner"
+        // warning; silence plus a value arriving means it works.
+        public static void ProbeOwnership(System.Action<string> log, System.Action<string> warn)
+        {
+            try
+            {
+                var players = UnityEngine.Object.FindObjectOfType<Il2CppScheduleOne.Casino.CasinoGamePlayers>();
+                var local = Il2CppScheduleOne.PlayerScripts.Player.Local;
+
+                if (players == null || local == null) { warn("[own] no CasinoGamePlayers or local player"); return; }
+
+                float value = UnityEngine.Random.Range(1f, 9999f);
+                log($"[own] sending {value:0.##} via SendPlayerFloat on '{players.name}' as {local.PlayerName}");
+                players.SendPlayerFloat(local.NetworkObject, "mod.probe", value);
+                log("[own] sent without throwing. Check the HOST console for a FishNet ownership warning, " +
+                    "and press again on the host to compare.");
+
+                var data = players.GetPlayerData(local);
+                if (data != null) log($"[own] read back locally: {data.GetData<float>("mod.probe"):0.##}");
+            }
+            catch (System.Exception e) { warn($"[own] threw: {e.Message}"); }
+        }
+
         public static void Apply(System.Action<string> log, System.Action<string> warn)
         {
             if (_probeTableWrite?.Value ?? false) ProbeTableWrite(log, warn);
