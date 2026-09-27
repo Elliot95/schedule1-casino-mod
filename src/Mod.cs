@@ -66,6 +66,9 @@ namespace CasinoExpansion
                     Tweaks.BetLimits.Apply(LoggerInstance.Msg, LoggerInstance.Warning);
                     Tweaks.CasinoHours.Apply(LoggerInstance.Msg, LoggerInstance.Warning);
 
+                    LoggerInstance.Msg("--- installing table game toggles ---");
+                    Casino.TableToggle.InstallAll(LoggerInstance.Msg, LoggerInstance.Warning);
+
                     LoggerInstance.Msg("--- spawning prize wheel ---");
                     _wheel.Spawn();
                     yield break;
