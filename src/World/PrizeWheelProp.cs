@@ -346,21 +346,25 @@ namespace CasinoExpansion.World
 
         private Il2CppTMPro.TextMeshPro _betLabel;
 
+        private const float ScreenTextZ = -0.085f;   // in front of the screen panel
+        private const float ButtonZ = -0.11f;        // in front of the text, so figures slide behind
+        private const float ButtonTextZ = -0.135f;   // on the face of the button
+
         // Modelled on the slot machines' own screen: an inset panel with a lit border, a small
         // persistent bet figure and a larger win figure, rather than one multipurpose line.
         private void AddReadout()
         {
-            MakePanel("ScreenBorder", new Vector3(0.94f, 0.50f, 0.05f),
-                new Vector3(0f, ControlsY + 0.07f, -0.03f), new Color(0.55f, 0.42f, 0.10f));
-            MakePanel("Screen", new Vector3(0.88f, 0.44f, 0.05f),
-                new Vector3(0f, ControlsY + 0.07f, -0.04f), new Color(0.03f, 0.03f, 0.04f));
+            MakePanel("ScreenBorder", new Vector3(0.94f, 0.42f, 0.04f),
+                new Vector3(0f, ControlsY + 0.10f, -0.03f), new Color(0.55f, 0.42f, 0.10f));
+            MakePanel("Screen", new Vector3(0.88f, 0.36f, 0.04f),
+                new Vector3(0f, ControlsY + 0.10f, -0.04f), new Color(0.03f, 0.03f, 0.04f));
 
             var font = BorrowSlotFont();
 
-            _readout = MakeLabel("WinLabel", new Vector3(0f, ControlsY + 0.13f, -0.05f), 1.15f, font,
+            // Screen front face sits at -0.06 (centre -0.04, half-depth 0.02). Text must clear
+            // that or it is simply buried inside the panel, which is what hid it before.
+            _readout = MakeLabel("WinLabel", new Vector3(0f, ControlsY + 0.10f, ScreenTextZ), 1.3f, font,
                 new Color(0.99f, 0.86f, 0.26f));
-            _betLabel = MakeLabel("BetLabel", new Vector3(0f, ControlsY - 0.03f, -0.05f), 0.62f, font,
-                new Color(0.75f, 0.75f, 0.80f));
 
             SetText("");
         }
@@ -411,13 +415,16 @@ namespace CasinoExpansion.World
             var button = GameObject.CreatePrimitive(PrimitiveType.Cube);
             button.name = "SpinButton";
             button.transform.SetParent(Root.transform, false);
-            button.transform.localPosition = new Vector3(0f, ControlsY + 0.30f, -0.07f);
-            button.transform.localScale = new Vector3(0.34f, 0.11f, 0.05f);
+            button.transform.localPosition = new Vector3(0f, ControlsY + 0.30f, ButtonZ);
+            button.transform.localScale = new Vector3(0.46f, 0.15f, 0.05f);
             Object.Destroy(button.GetComponent<Collider>());
 
             var renderer = button.GetComponent<MeshRenderer>();
             ApplyGameShader(renderer);
             SetColor(renderer.material, new Color(0.85f, 0.65f, 0.12f));
+
+            _betLabel = MakeLabel("BetLabel", new Vector3(0f, ControlsY + 0.30f, ButtonTextZ), 0.7f,
+                BorrowSlotFont(), new Color(0.12f, 0.08f, 0.02f));
             return button;
         }
 
@@ -426,7 +433,7 @@ namespace CasinoExpansion.World
             var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
             pad.name = name;
             pad.transform.SetParent(Root.transform, false);
-            pad.transform.localPosition = new Vector3(x, ControlsY - 0.02f, -0.07f);
+            pad.transform.localPosition = new Vector3(x, ControlsY - 0.10f, ButtonZ);
             pad.transform.localScale = new Vector3(0.13f, 0.11f, 0.05f);
             Object.Destroy(pad.GetComponent<Collider>());
 

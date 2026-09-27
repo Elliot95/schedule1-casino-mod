@@ -60,7 +60,7 @@ namespace CasinoExpansion.Games
             InteractableFactory.Attach(_prop.BetDownAnchor, "Lower bet", new Vector3(1.2f, 1.4f, 1.2f),
                 (UnityAction)(() => ChangeBet(-1)), MelonLogger.Msg, MelonLogger.Warning);
 
-            _prop.SetBet($"BET ${Stake:N0}");
+            _prop.SetBet($"${Stake:N0}");
             MelonLogger.Msg($"[wheel] spawned at {pos.x:0.##},{pos.y:0.##},{pos.z:0.##} " +
                             $"(player at {player.transform.position.x:0.##},{player.transform.position.y:0.##},{player.transform.position.z:0.##})");
         }
@@ -118,7 +118,7 @@ namespace CasinoExpansion.Games
 
             _betIndex = next;
             _spinInteractable?.SetMessage(SpinMessage());
-            _prop.SetBet($"BET ${Stake:N0}");
+            _prop.SetBet($"${Stake:N0}");
             MelonLogger.Msg($"[wheel] bet now {Stake:N0}");
         }
 
