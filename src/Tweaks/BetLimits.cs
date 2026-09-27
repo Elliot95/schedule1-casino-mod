@@ -25,6 +25,7 @@ namespace CasinoExpansion.Tweaks
 
         private static MelonPreferences_Entry<int> _extraSlotTiers;
         private static MelonPreferences_Entry<bool> _slotLadderEnabled;
+        private static MelonPreferences_Entry<bool> _probeTableWrite;
 
         public static void InitPreferences()
         {
@@ -34,14 +35,43 @@ namespace CasinoExpansion.Tweaks
                 description: "Append higher tiers to the slot bet ladder.");
             _extraSlotTiers = cat.CreateEntry("ExtraSlotTiers", 2,
                 description: "Extra slot bet tiers to append. 2 adds double and triple the vanilla max.");
+            _probeTableWrite = cat.CreateEntry("ProbeTableBetWrite", false,
+                description: "DIAGNOSTIC. Writes MaximumBet back unchanged to find out whether the write itself crashes. May crash the game.");
         }
 
         public static void Apply(System.Action<string> log, System.Action<string> warn)
         {
+            if (_probeTableWrite?.Value ?? false) ProbeTableWrite(log, warn);
+
             if (_slotLadderEnabled?.Value ?? false)
                 ApplySlotLadder(log, warn);
             else
                 log("Slot ladder unchanged (RaiseSlotLadder is off).");
+        }
+
+        // Isolates cause from effect. Two crashes both died immediately after "writing...", but
+        // that cannot distinguish the write itself failing from the game choking on a changed
+        // value. Writing the SAME value back separates them: a crash here means the write
+        // mechanism is at fault and the value is irrelevant; surviving means the write is fine
+        // and a raised limit is what the game cannot handle.
+        private static void ProbeTableWrite(System.Action<string> log, System.Action<string> warn)
+        {
+            try
+            {
+                log("[probe] reading blackjack MinimumBet...");
+                int min = Il2CppScheduleOne.Casino.BlackjackGameController.MinimumBet;
+                log($"[probe] read min={min}. Writing the SAME value back...");
+
+                Il2CppScheduleOne.Casino.BlackjackGameController.MinimumBet = min;
+                log("[probe] SURVIVED unchanged write to MinimumBet -- the write itself is fine");
+
+                int max = Il2CppScheduleOne.Casino.BlackjackGameController.MaximumBet;
+                log($"[probe] read max={max}. Writing the SAME value back...");
+
+                Il2CppScheduleOne.Casino.BlackjackGameController.MaximumBet = max;
+                log("[probe] SURVIVED unchanged write to MaximumBet -- so a CHANGED value is the problem, not the write");
+            }
+            catch (System.Exception e) { warn($"[probe] threw rather than crashed: {e.Message}"); }
         }
 
         private static void ApplySlotLadder(System.Action<string> log, System.Action<string> warn)
