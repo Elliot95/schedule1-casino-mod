@@ -262,7 +262,12 @@ namespace CasinoExpansion.Casino
                 if (players == null) return "Players\n(none)";
 
                 int count = players.CurrentPlayerCount;
-                var lines = new List<string> { $"<b>Players ({count}/{players.PlayerLimit})</b>" };
+                int readyCount = ReadyCount(controller);
+                var lines = new List<string>
+                {
+                    $"<b>Players ({count}/{players.PlayerLimit})</b>",
+                    $"<size=80%>{readyCount} of {count} ready</size>",
+                };
 
                 // Capped rather than scrolled: a player-count mod could seat far more than the
                 // plate holds, and a count of the remainder is honest without a ScrollRect.
@@ -272,9 +277,10 @@ namespace CasinoExpansion.Casino
                     var p = players.GetPlayer(i);
                     if (p == null) continue;
 
-                    var data = players.GetPlayerData(i);
-                    bool ready = IsReady(data, chrome);
-                    lines.Add($"{(ready ? "[x]" : "[ ]")} {p.PlayerName}");
+                    // Only the local player's state is knowable individually; everyone shows
+                    // ticked once the exposed count says the whole table is ready.
+                    bool ready = p.IsLocalPlayer ? IsLocalReady(controller) : readyCount >= count;
+                    lines.Add($"{(ready ? "[x]" : "[  ]")} {p.PlayerName}");
                 }
 
                 if (count > shown) lines.Add($"  +{count - shown} more");
@@ -283,22 +289,40 @@ namespace CasinoExpansion.Casino
             catch (Exception e) { return $"Players\n({e.GetType().Name})"; }
         }
 
-        // The ready flag lives in the per-player bool dictionary, but its key is the game's own.
-        // Match loosely and log the keys once so the real name can be pinned down.
-        private static bool IsReady(Il2CppScheduleOne.Casino.CasinoGamePlayerData data, Chrome chrome)
+        // Vanilla keeps per-player ready state privately -- the per-player bool dictionary is
+        // empty, so a remote player's individual state is not knowable. What IS exposed is
+        // GetPlayersReadyCount(), and our own toggle can be tracked directly, which covers the
+        // solo case exactly and gives an honest total in multiplayer.
+        private static readonly Dictionary<int, bool> LocalReady = new Dictionary<int, bool>();
+
+        private static bool IsLocalReady(Controller c) =>
+            c != null && LocalReady.TryGetValue(c.GetInstanceID(), out var r) && r;
+
+        private static int ReadyCount(Controller c)
         {
-            if (data?.bools == null) return false;
+            var bj = c.TryCast<Il2CppScheduleOne.Casino.BlackjackGameController>();
+            if (bj != null) return bj.GetPlayersReadyCount();
 
-            foreach (var kv in data.bools)
+            var rtb = c.TryCast<Il2CppScheduleOne.Casino.RTBGameController>();
+            return rtb != null ? rtb.GetPlayersReadyCount() : 0;
+        }
+
+        [HarmonyPatch(typeof(Controller), nameof(Controller.ToggleLocalPlayerReady))]
+        internal static class ReadyTogglePatch
+        {
+            private static void Postfix(Controller __instance)
             {
-                if (!chrome.LoggedKeys)
-                    MelonLogger.Msg($"[chrome] player bool key '{kv.Key}' = {kv.Value}");
-
-                if (kv.Key != null && kv.Key.ToLowerInvariant().Contains("ready")) return kv.Value;
+                int id = __instance.GetInstanceID();
+                LocalReady[id] = !IsLocalReady(__instance);
+                foreach (var chrome in Panels.Values)
+                    if (chrome.Controller == __instance) Refresh(chrome);
             }
+        }
 
-            chrome.LoggedKeys = true;
-            return false;
+        [HarmonyPatch(typeof(Controller), nameof(Controller.Close))]
+        internal static class ControllerClosePatch
+        {
+            private static void Postfix(Controller __instance) => LocalReady.Remove(__instance.GetInstanceID());
         }
     }
 }
