@@ -357,9 +357,9 @@ namespace CasinoExpansion.World
 
             var font = BorrowSlotFont();
 
-            _readout = MakeLabel("WinLabel", new Vector3(0f, ControlsY + 0.13f, -0.05f), 0.62f, font,
+            _readout = MakeLabel("WinLabel", new Vector3(0f, ControlsY + 0.13f, -0.05f), 1.15f, font,
                 new Color(0.99f, 0.86f, 0.26f));
-            _betLabel = MakeLabel("BetLabel", new Vector3(0f, ControlsY - 0.02f, -0.05f), 0.34f, font,
+            _betLabel = MakeLabel("BetLabel", new Vector3(0f, ControlsY - 0.03f, -0.05f), 0.62f, font,
                 new Color(0.75f, 0.75f, 0.80f));
 
             SetText("");
@@ -376,22 +376,21 @@ namespace CasinoExpansion.World
         private Il2CppTMPro.TextMeshPro MakeLabel(string name, Vector3 pos, float size,
             Il2CppTMPro.TMP_FontAsset font, Color colour)
         {
+            // Parent first, then add the component. Creating it detached and reparenting the
+            // RectTransform afterwards left the labels invisible.
             var go = new GameObject(name);
-            var label = go.AddComponent<Il2CppTMPro.TextMeshPro>();
+            go.transform.SetParent(Root.transform, false);
+            go.transform.localPosition = pos;
+            go.transform.localRotation = Quaternion.identity;
 
-            // Sits between the board and the buttons, so an overlong figure slides behind them
-            // rather than overlapping. Wrapping off keeps it on one line whatever the amount.
+            var label = go.AddComponent<Il2CppTMPro.TextMeshPro>();
             label.fontSize = size;
             label.alignment = Il2CppTMPro.TextAlignmentOptions.Center;
             label.enableWordWrapping = false;
             label.overflowMode = Il2CppTMPro.TextOverflowModes.Overflow;
             label.color = colour;
             if (font != null) label.font = font;
-
-            label.rectTransform.SetParent(null, false);
-            go.transform.SetParent(Root.transform, false);
-            go.transform.localPosition = pos;
-            label.rectTransform.sizeDelta = new Vector2(0.84f, 0.16f);
+            label.rectTransform.sizeDelta = new Vector2(0.84f, 0.18f);
             return label;
         }
 
