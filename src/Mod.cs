@@ -13,7 +13,9 @@ namespace CasinoExpansion
         public override void OnInitializeMelon()
         {
             Tweaks.BetLimits.InitPreferences();
-            CasinoExpansion.Games.PrizeWheelGame.InitPreferences(MelonPreferences.CreateCategory("CasinoExpansion"));
+            var cat = MelonPreferences.CreateCategory("CasinoExpansion");
+            CasinoExpansion.Games.PrizeWheelGame.InitPreferences(cat);
+            Tweaks.CasinoHours.InitPreferences(cat);
             LoggerInstance.Msg("CasinoExpansion loaded. F9 moves the prize wheel to you.");
         }
 
@@ -58,6 +60,7 @@ namespace CasinoExpansion
 
                     LoggerInstance.Msg("--- applying bet limit changes ---");
                     Tweaks.BetLimits.Apply(LoggerInstance.Msg, LoggerInstance.Warning);
+                    Tweaks.CasinoHours.Apply(LoggerInstance.Msg, LoggerInstance.Warning);
 
                     LoggerInstance.Msg("--- spawning prize wheel ---");
                     _wheel.Spawn();
