@@ -35,6 +35,8 @@ namespace CasinoExpansion.World
             var host = GameObject.CreatePrimitive(PrimitiveType.Quad);
             host.name = "Disc";
             host.transform.SetParent(Root.transform, false);
+            host.transform.localPosition = new Vector3(0f, DiscY, -0.05f);
+            host.transform.localScale = Vector3.one * 0.82f;
             Object.Destroy(host.GetComponent<Collider>());
 
             host.GetComponent<MeshFilter>().mesh = BuildDisc();
@@ -45,9 +47,10 @@ namespace CasinoExpansion.World
 
             AddPointer();
             AddBody();
+            AddControlBezel();
             AddReadout();
-            BetUpAnchor = AddBetPad("BetUp", 0.48f, new Color(0.25f, 0.55f, 0.25f));
-            BetDownAnchor = AddBetPad("BetDown", -0.48f, new Color(0.55f, 0.25f, 0.25f));
+            BetUpAnchor = AddBetPad("BetUp", 0.30f, new Color(0.25f, 0.62f, 0.28f));
+            BetDownAnchor = AddBetPad("BetDown", -0.30f, new Color(0.62f, 0.25f, 0.25f));
 
             // Layer 0 (Default) casts shadows but never rendered -- the camera's culling mask
             // does not include it. Door is known good: visible in game and inside
@@ -98,22 +101,68 @@ namespace CasinoExpansion.World
                 $"verts={(mf?.mesh == null ? -1 : mf.mesh.vertexCount)} tris={(mf?.mesh == null ? -1 : mf.mesh.triangles.Length / 3)}");
         }
 
-        // Wheel needs a collider for the interaction raycast, on a layer inside
-        // InteractionManager's search mask -- layer 0 (Default) is in it. There is no
-        // interactable registry, so an off-mask layer means the prop is simply unhittable.
+        // Borrow a real slot machine cabinet so the wheel reads as a machine standing on the
+        // floor rather than a panel hanging in the air. The clone is visual only: its
+        // NetworkObject and NetworkBehaviours are stripped immediately, since a runtime copy of a
+        // networked object has no valid spawn identity and would misbehave for remote clients.
         private void AddBody()
         {
+            if (TryCloneCabinet()) return;
+
             var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
             body.name = "Body";
             body.transform.SetParent(Root.transform, false);
-            body.transform.localPosition = new Vector3(0f, -0.15f, 0.06f);
-            body.transform.localScale = new Vector3(1.15f, 1.15f, 0.08f);
-
+            body.transform.localPosition = new Vector3(0f, -0.05f, 0.06f);
+            body.transform.localScale = new Vector3(1.05f, 1.55f, 0.12f);
             Object.Destroy(body.GetComponent<Collider>());
 
-            var bodyRenderer = body.GetComponent<MeshRenderer>();
-            ApplyGameShader(bodyRenderer);
-            SetColor(bodyRenderer.material, new Color(0.35f, 0.05f, 0.08f));
+            var renderer = body.GetComponent<MeshRenderer>();
+            ApplyGameShader(renderer);
+            SetColor(renderer.material, new Color(0.35f, 0.05f, 0.08f));
+        }
+
+        private bool TryCloneCabinet()
+        {
+            var donor = Object.FindObjectOfType<Il2CppScheduleOne.Casino.SlotMachine>();
+            if (donor == null) return false;
+
+            try
+            {
+                var cabinet = Object.Instantiate(donor.gameObject);
+                cabinet.name = "Cabinet";
+
+                foreach (var nb in cabinet.GetComponentsInChildren<Il2CppFishNet.Object.NetworkBehaviour>(true))
+                    Object.Destroy(nb);
+                foreach (var no in cabinet.GetComponentsInChildren<Il2CppFishNet.Object.NetworkObject>(true))
+                    Object.Destroy(no);
+
+                // The donor's own controls would otherwise offer their prompts on our machine.
+                foreach (var io in cabinet.GetComponentsInChildren<Il2CppScheduleOne.Interaction.InteractableObject>(true))
+                    Object.Destroy(io.gameObject);
+
+                cabinet.transform.SetParent(Root.transform, false);
+                cabinet.transform.localPosition = new Vector3(0f, -1.15f, 0.35f);
+                cabinet.transform.localRotation = Quaternion.identity;
+
+                var bounds = CombinedBounds(cabinet);
+                MelonLoader.MelonLogger.Msg($"[wheel] cloned slot cabinet, bounds {bounds.size}");
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                MelonLoader.MelonLogger.Warning($"[wheel] cabinet clone failed, using plain body: {e.Message}");
+                return false;
+            }
+        }
+
+        private static Bounds CombinedBounds(GameObject go)
+        {
+            var renderers = go.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return new Bounds(go.transform.position, Vector3.zero);
+
+            var b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            return b;
         }
 
         // GameObject.CreatePrimitive hands back a built-in "Standard" material. If the game runs
@@ -173,29 +222,27 @@ namespace CasinoExpansion.World
                                         $"_BaseMap={m.HasProperty("_BaseMap")} _MainTex={m.HasProperty("_MainTex")}");
         }
 
-        // A wedge pointing down into the rim, so the winning slice is unambiguous. The cube it
-        // replaced only marked the top of the wheel without indicating anything.
+        // A "<" sitting just inside the rim. The previous wedge hung outside the disc and
+        // past the body edge, which looked bolted on rather than part of the machine.
         private void AddPointer()
         {
             var pointer = new GameObject("Pointer");
-            pointer.transform.SetParent(Root.transform, false);
-            // Right edge at 3 o'clock, rotated to aim inward at the rim.
-            pointer.transform.localPosition = new Vector3(0.585f, 0f, -0.04f);
-            pointer.transform.localRotation = Quaternion.Euler(0f, 0f, -90f);
+            pointer.transform.SetParent(_disc.parent, false);
+            pointer.transform.localPosition = new Vector3(0.40f, DiscY, -0.03f);
 
             var mesh = new Mesh { name = "PrizeWheelPointer" };
-            const float w = 0.055f, h = 0.13f, d = 0.02f;
+            const float len = 0.10f, halfH = 0.055f, d = 0.012f;
             mesh.vertices = new[]
             {
-                new Vector3(-w, h, -d), new Vector3(w, h, -d), new Vector3(0f, -h, -d),  // front
-                new Vector3(-w, h,  d), new Vector3(w, h,  d), new Vector3(0f, -h,  d),  // back
+                new Vector3(-len, 0f, -d), new Vector3(0f,  halfH, -d), new Vector3(0f, -halfH, -d),
+                new Vector3(-len, 0f,  d), new Vector3(0f,  halfH,  d), new Vector3(0f, -halfH,  d),
             };
             mesh.triangles = new[]
             {
-                0, 2, 1,   3, 4, 5,                 // the two faces
-                0, 1, 4,   0, 4, 3,                 // top edge
-                1, 2, 5,   1, 5, 4,                 // right edge
-                2, 0, 3,   2, 3, 5,                 // left edge
+                0, 1, 2,   3, 5, 4,
+                0, 2, 5,   0, 5, 3,
+                0, 3, 4,   0, 4, 1,
+                1, 4, 5,   1, 5, 2,
             };
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
@@ -206,9 +253,27 @@ namespace CasinoExpansion.World
             SetColor(renderer.material, new Color(0.98f, 0.88f, 0.35f));
         }
 
-        // Small pads either side of the stem, standing in for the slot machine's up/down bet
-        // buttons. The interactable itself is attached by the game layer.
+        private const float DiscY = 0.28f;        // disc sits high on the face
+        private const float ControlsY = -0.42f;   // bet controls share one strip below it
+
         private Il2CppTMPro.TextMeshPro _readout;
+
+        // A recessed strip behind the readout and pads so they read as one control group rather
+        // than three unrelated objects floating on the front.
+        private void AddControlBezel()
+        {
+            var bezel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            bezel.name = "ControlBezel";
+            bezel.transform.SetParent(Root.transform, false);
+            bezel.transform.localPosition = new Vector3(0f, ControlsY, -0.02f);
+            bezel.transform.localScale = new Vector3(0.86f, 0.19f, 0.06f);
+            Object.Destroy(bezel.GetComponent<Collider>());
+
+            var renderer = bezel.GetComponent<MeshRenderer>();
+            ApplyGameShader(renderer);
+            SetColor(renderer.material, new Color(0.07f, 0.07f, 0.09f));
+        }
+
 
         // Shows the stake, and the win when a round resolves. Font is borrowed from one already
         // loaded by the game so the text matches the rest of the UI.
@@ -216,13 +281,13 @@ namespace CasinoExpansion.World
         {
             var go = new GameObject("Readout");
             go.transform.SetParent(Root.transform, false);
-            go.transform.localPosition = new Vector3(0f, -0.72f, -0.05f);
+            go.transform.localPosition = new Vector3(0f, ControlsY, -0.06f);
 
             _readout = go.AddComponent<Il2CppTMPro.TextMeshPro>();
-            _readout.fontSize = 2.2f;
+            _readout.fontSize = 1.5f;
             _readout.alignment = Il2CppTMPro.TextAlignmentOptions.Center;
             _readout.color = new Color(0.98f, 0.88f, 0.35f);
-            _readout.rectTransform.sizeDelta = new Vector2(1.1f, 0.3f);
+            _readout.rectTransform.sizeDelta = new Vector2(0.5f, 0.18f);
 
             var font = Resources.FindObjectsOfTypeAll<Il2CppTMPro.TMP_FontAsset>().FirstOrDefault();
             if (font != null) _readout.font = font;
@@ -240,8 +305,8 @@ namespace CasinoExpansion.World
             var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
             pad.name = name;
             pad.transform.SetParent(Root.transform, false);
-            pad.transform.localPosition = new Vector3(x, -0.62f, -0.02f);
-            pad.transform.localScale = new Vector3(0.16f, 0.12f, 0.06f);
+            pad.transform.localPosition = new Vector3(x, ControlsY, -0.055f);
+            pad.transform.localScale = new Vector3(0.13f, 0.11f, 0.05f);
             Object.Destroy(pad.GetComponent<Collider>());
 
             var renderer = pad.GetComponent<MeshRenderer>();

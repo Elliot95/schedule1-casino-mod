@@ -22,7 +22,11 @@ namespace CasinoExpansion.Core
 
         // Grand prize is a flat cash multiplier for now. Item prizes are a later conversation;
         // their value has to be budgeted the same way this multiplier is.
-        public const int GrandPrizeMultiplier = 100;
+        public const int GrandPrizeMultiplier = 50;
+
+        // Roughly one spin in six should pay something. A single 100x jackpot consumed the whole
+        // RTP budget and left 75 of 76 slices dead, which made the wheel unreadable and untestable.
+        public const int PayingSliceFraction = 6;
 
         private static int[] _table;
 
@@ -45,8 +49,8 @@ namespace CasinoExpansion.Core
 
         public static void Calibrate(float stake, float targetRtp, Action<string> log, Action<string> warn)
         {
-            // Pick the smallest wheel whose jackpot share lands at or under target -- flooring
-            // the RTP rather than rounding it up, so the wheel never beats the slots.
+            // Smallest wheel whose jackpot share fits under target, flooring rather than rounding
+            // up so the wheel never beats the slots.
             int count = PrizeWheelSlices.MinCount;
             while (targetRtp > 0f && (float)GrandPrizeMultiplier / count > targetRtp) count++;
             PrizeWheelSlices.SetCount(count);
@@ -55,21 +59,30 @@ namespace CasinoExpansion.Core
             _table[PrizeWheelSlices.GrandPrize] = GrandPrizeMultiplier;
 
             float grandRtp = (float)GrandPrizeMultiplier / count;
-            float cashBudget = targetRtp - grandRtp;
+            float cashBudget = Math.Max(0f, targetRtp - grandRtp);
 
-            log($"-- Wheel calibration: target {targetRtp:P2}, {GrandPrizeMultiplier}x jackpot " +
-                $"diluted across {count} slices = {grandRtp:P2}, leaving {cashBudget:P2}");
+            // Winners are spread evenly around the face rather than clustered, so the wheel reads
+            // as a fair mix at a glance instead of one live wedge.
+            int winners = Math.Max(1, count / PayingSliceFraction - 1);
+            int perWinner = (int)Math.Floor(cashBudget * count / winners);
 
-            float rawRtp = Enumerable.Range(0, count).Sum(BaseWeight) / count;
-            float scale = rawRtp <= 0f ? 0f : cashBudget / rawRtp;
-
-            for (int i = 0; i < count; i++)
-                if (i != PrizeWheelSlices.GrandPrize)
-                    _table[i] = (int)Math.Floor(BaseWeight(i) * scale);
+            if (perWinner >= 1)
+            {
+                float step = (float)count / winners;
+                for (int w = 0; w < winners; w++)
+                {
+                    int slice = (int)Math.Round(w * step) % count;
+                    if (slice == PrizeWheelSlices.GrandPrize) slice = (slice + 1) % count;
+                    _table[slice] = perWinner;
+                }
+            }
+            else warn($"cash budget {cashBudget:P2} too small to pay any slice");
 
             int paying = _table.Count(m => m > 0);
-            log($"-- Wheel table: {count} slices, {paying} paying, jackpot {GrandPrizeMultiplier}x, " +
-                $"card scale x{scale:0.##}. Total RTP {TotalRtp():P2}");
+            log($"-- Wheel calibration: target {targetRtp:P2}, jackpot {GrandPrizeMultiplier}x " +
+                $"over {count} slices = {grandRtp:P2}, leaving {cashBudget:P2}");
+            log($"-- Wheel table: {paying} of {count} paying (1 in {count / (float)paying:0.#}), " +
+                $"winners {perWinner}x. Total RTP {TotalRtp():P2}");
         }
 
         public static float CashMultiplier(int slice)

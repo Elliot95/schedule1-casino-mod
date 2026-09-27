@@ -81,13 +81,13 @@ namespace CasinoExpansion.Games
             forward.y = 0f;
             forward = forward.sqrMagnitude < 0.01f ? Vector3.forward : forward.normalized;
 
-            var pos = player.position + forward * 1.6f + Vector3.up * 1.2f;
+            var pos = player.position + forward * 1.8f + Vector3.up * 1.1f;
 
             // Spawning into a wall looks exactly like a rendering bug, which cost a lot of time
             // to rule out once. If the spot is occupied, pull it back toward the player.
             if (Physics.CheckSphere(pos, 0.7f))
             {
-                pos = player.position + forward * 0.9f + Vector3.up * 1.4f;
+                pos = player.position + forward * 1.1f + Vector3.up * 1.1f;
                 MelonLogger.Msg("[wheel] spawn point was obstructed, placed closer instead");
             }
 
