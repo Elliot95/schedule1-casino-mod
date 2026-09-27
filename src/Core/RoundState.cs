@@ -25,6 +25,10 @@ namespace CasinoExpansion.Core
         public static string Result(string gameId) => $"{Prefix}{gameId}.result";
         public static string Bet(string gameId)    => $"{Prefix}{gameId}.bet";
         public static string Ready(string gameId)  => $"{Prefix}{gameId}.ready";
+
+        // Which game a seated player has chosen. Replicated so every seat can be checked for
+        // agreement before a round is dealt.
+        public static string Game(string gameId)   => $"{Prefix}{gameId}.game";
     }
 
     public sealed class RoundState

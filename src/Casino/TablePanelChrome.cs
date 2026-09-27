@@ -146,6 +146,7 @@ namespace CasinoExpansion.Casino
                 opt.Button.onClick.AddListener((UnityAction)(() =>
                 {
                     TableModes.Set(chrome.Controller, game);
+                    TableSession.For(chrome.Controller)?.PublishChoice(game);
                     chrome.OptionList.SetActive(false);
                     Refresh(chrome);
                 }));

@@ -21,6 +21,8 @@ namespace CasinoExpansion
 
         public override void OnUpdate()
         {
+            Casino.TableSession.TickAll();
+
             if (Input.GetKeyDown(KeyCode.F9))
                 _wheel.Respawn();
 
@@ -30,6 +32,10 @@ namespace CasinoExpansion
 
             if (Input.GetKeyDown(KeyCode.F11))
                 Probe.UiDonors.Run(LoggerInstance.Msg, LoggerInstance.Warning);
+
+            // The multiplayer gating test -- run from a non-host client during a co-op session.
+            if (Input.GetKeyDown(KeyCode.F8))
+                Tweaks.BetLimits.ProbeOwnership(LoggerInstance.Msg, LoggerInstance.Warning);
         }
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
