@@ -28,6 +28,9 @@ namespace CasinoExpansion.Casino
             public GameObject OptionList;
             public readonly List<Text_> Options = new List<Text_>();
             public Controller Controller;
+            public RectTransform ReadyRect;
+            public Vector2 ReadyHome;
+            public bool LoggedKeys;
         }
 
         // TextMeshProUGUI is awkward to name through interop in a few places; this keeps the
@@ -56,8 +59,9 @@ namespace CasinoExpansion.Casino
         {
             private static void Postfix(BetPanel __instance)
             {
-                if (Panels.TryGetValue(__instance.GetInstanceID(), out var chrome) && chrome.Root != null)
-                    chrome.Root.SetActive(false);
+                if (!Panels.TryGetValue(__instance.GetInstanceID(), out var chrome)) return;
+                if (chrome.Root != null) chrome.Root.SetActive(false);
+                if (chrome.ReadyRect != null) chrome.ReadyRect.anchoredPosition = chrome.ReadyHome;
             }
         }
 
@@ -76,6 +80,8 @@ namespace CasinoExpansion.Casino
 
             chrome.Controller = game;
             chrome.Root.SetActive(true);
+            if (chrome.ReadyRect != null)
+                chrome.ReadyRect.anchoredPosition = chrome.ReadyHome + new Vector2(-88f, 0f);
             chrome.OptionList.SetActive(false);
             Refresh(chrome);
         }
@@ -105,8 +111,13 @@ namespace CasinoExpansion.Casino
             const float HalfW = 252f;
 
             // Selector tucks inside, level with Ready and clear of it.
+            // Ready shifts left to make room; its original position is kept so vanilla layout
+            // is restored when the panel closes.
+            chrome.ReadyRect = readyGo.GetComponent<RectTransform>();
+            chrome.ReadyHome = chrome.ReadyRect.anchoredPosition;
+
             chrome.Selector = CloneButton(readyGo, chrome.Root.transform,
-                new Vector2(168f, -81.5f), new Vector2(150f, 40f));
+                new Vector2(150f, -81.5f), new Vector2(160f, 40f));
 
             // Wings sit deliberately outside the container, each on its own backing so they read
             // as attached panels rather than text floating over the table.
@@ -235,31 +246,59 @@ namespace CasinoExpansion.Casino
             if (chrome.Rules?.Label != null)
                 chrome.Rules.Label.text = string.Join("\n", TableRules.For(game));
             if (chrome.Players?.Label != null)
-                chrome.Players.Label.text = BuildPlayerList(chrome.Controller);
+                chrome.Players.Label.text = BuildPlayerList(chrome);
         }
 
         // Solo, one readied player is enough; the vanilla panel's "waiting for other players"
-        // gives no sense of who is actually holding things up.
-        private static string BuildPlayerList(Controller controller)
+        // never says who is actually holding things up.
+        private const int MaxListed = 6;
+
+        private static string BuildPlayerList(Chrome chrome)
         {
+            var controller = chrome.Controller;
             try
             {
                 var players = controller.Players;
                 if (players == null) return "Players\n(none)";
 
                 int count = players.CurrentPlayerCount;
-                var lines = new List<string> { $"Players ({count}/{players.PlayerLimit})" };
+                var lines = new List<string> { $"<b>Players ({count}/{players.PlayerLimit})</b>" };
 
-                for (int i = 0; i < count; i++)
+                // Capped rather than scrolled: a player-count mod could seat far more than the
+                // plate holds, and a count of the remainder is honest without a ScrollRect.
+                int shown = Math.Min(count, MaxListed);
+                for (int i = 0; i < shown; i++)
                 {
                     var p = players.GetPlayer(i);
                     if (p == null) continue;
-                    lines.Add($"  {p.PlayerName}");
+
+                    var data = players.GetPlayerData(i);
+                    bool ready = IsReady(data, chrome);
+                    lines.Add($"{(ready ? "[x]" : "[ ]")} {p.PlayerName}");
                 }
 
+                if (count > shown) lines.Add($"  +{count - shown} more");
                 return string.Join("\n", lines);
             }
             catch (Exception e) { return $"Players\n({e.GetType().Name})"; }
+        }
+
+        // The ready flag lives in the per-player bool dictionary, but its key is the game's own.
+        // Match loosely and log the keys once so the real name can be pinned down.
+        private static bool IsReady(Il2CppScheduleOne.Casino.CasinoGamePlayerData data, Chrome chrome)
+        {
+            if (data?.bools == null) return false;
+
+            foreach (var kv in data.bools)
+            {
+                if (!chrome.LoggedKeys)
+                    MelonLogger.Msg($"[chrome] player bool key '{kv.Key}' = {kv.Value}");
+
+                if (kv.Key != null && kv.Key.ToLowerInvariant().Contains("ready")) return kv.Value;
+            }
+
+            chrome.LoggedKeys = true;
+            return false;
         }
     }
 }
