@@ -38,7 +38,7 @@ namespace CasinoExpansion.World
             host.name = "Disc";
             host.transform.SetParent(Root.transform, false);
             host.transform.localPosition = new Vector3(0f, DiscY, -0.05f);
-            host.transform.localScale = Vector3.one * 0.82f;
+            host.transform.localScale = Vector3.one * 0.86f;
             Object.Destroy(host.GetComponent<Collider>());
 
             host.GetComponent<MeshFilter>().mesh = BuildDisc();
@@ -61,7 +61,7 @@ namespace CasinoExpansion.World
             // InteractionManager's search mask, so the prop stays clickable.
             SetLayerRecursive(Root, RenderLayer);
 
-            Effects.Build(Root.transform, new Vector3(0f, -0.84f, 0.02f),
+            Effects.Build(Root.transform, new Vector3(0f, -1.12f, 0.03f),
                 MelonLoader.MelonLogger.Msg, MelonLoader.MelonLogger.Warning);
 
             LogCameras();
@@ -114,24 +114,33 @@ namespace CasinoExpansion.World
         // networked object has no valid spawn identity and would misbehave for remote clients.
         private void AddBody()
         {
-            if (TryCloneBillboard()) return;
-
-            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            body.name = "Body";
-            body.transform.SetParent(Root.transform, false);
-            body.transform.localPosition = new Vector3(0f, -0.05f, 0.06f);
-            body.transform.localScale = new Vector3(1.05f, 1.55f, 0.12f);
-            Object.Destroy(body.GetComponent<Collider>());
-
-            var renderer = body.GetComponent<MeshRenderer>();
-            ApplyGameShader(renderer);
-            SetColor(renderer.material, new Color(0.35f, 0.05f, 0.08f));
+            // Gold frame is simply a slightly larger panel sitting behind the dark one, so the
+            // border shows around every edge. Cheaper and far more predictable than cloning the
+            // billboard, whose real dimensions never matched what its bounds implied.
+            MakePanel("Frame", new Vector3(1.62f, 2.46f, 0.06f), new Vector3(0f, 0f, 0.10f),
+                new Color(0.86f, 0.68f, 0.18f));
+            MakePanel("Board", new Vector3(1.48f, 2.32f, 0.08f), new Vector3(0f, 0f, 0.06f),
+                new Color(0.16f, 0.04f, 0.06f));
         }
 
         // The roadside billboard at the Slums Gas Station: a flat panel, already framed, which
         // is a far better backboard than a primitive cube. Its width runs along Z rather than X,
         // so it is rotated to face the player, and its advertising material is replaced with flat
         // colour -- the artwork would otherwise read as a advert rather than a machine.
+        private void MakePanel(string name, Vector3 scale, Vector3 pos, Color colour)
+        {
+            var panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            panel.name = name;
+            panel.transform.SetParent(Root.transform, false);
+            panel.transform.localPosition = pos;
+            panel.transform.localScale = scale;
+            Object.Destroy(panel.GetComponent<Collider>());
+
+            var renderer = panel.GetComponent<MeshRenderer>();
+            ApplyGameShader(renderer);
+            SetColor(renderer.material, colour);
+        }
+
         private bool TryCloneBillboard()
         {
             try
@@ -276,7 +285,7 @@ namespace CasinoExpansion.World
         {
             var pointer = new GameObject("Pointer");
             pointer.transform.SetParent(Root.transform, false);
-            pointer.transform.localPosition = new Vector3(0.335f, DiscY, -0.10f);
+            pointer.transform.localPosition = new Vector3(0.365f, DiscY, -0.11f);
 
             AddChevronArm(pointer.transform, +32f);
             AddChevronArm(pointer.transform, -32f);
@@ -297,8 +306,8 @@ namespace CasinoExpansion.World
             SetColor(renderer.material, new Color(0.98f, 0.88f, 0.35f));
         }
 
-        private const float DiscY = 0.28f;        // disc sits high on the face
-        private const float ControlsY = -0.42f;   // bet controls share one strip below it
+        private const float DiscY = 0.45f;        // disc sits high, fully clear of the controls
+        private const float ControlsY = -0.58f;   // bet controls sit below the disc, never overlapping
 
         private Il2CppTMPro.TextMeshPro _readout;
 
@@ -311,8 +320,8 @@ namespace CasinoExpansion.World
             var bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
             bar.name = "ConcealerBar";
             bar.transform.SetParent(Root.transform, false);
-            bar.transform.localPosition = new Vector3(0f, -0.80f, -0.12f);
-            bar.transform.localScale = new Vector3(1.30f, 0.16f, 0.14f);
+            bar.transform.localPosition = new Vector3(0f, -1.06f, -0.10f);
+            bar.transform.localScale = new Vector3(1.48f, 0.17f, 0.16f);
             Object.Destroy(bar.GetComponent<Collider>());
 
             var renderer = bar.GetComponent<MeshRenderer>();

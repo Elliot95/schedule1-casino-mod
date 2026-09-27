@@ -19,11 +19,14 @@ namespace CasinoExpansion.Games
 
         private static MelonPreferences_Entry<string> _position;
         private static MelonPreferences_Entry<float> _stake;
+        private static MelonPreferences_Entry<float> _testJackpotChance;
 
         public static void InitPreferences(MelonPreferences_Category cat)
         {
             _position = cat.CreateEntry("WheelPosition", "",
                 description: "Wheel world position as x,y,z. Empty spawns it just in front of the player.");
+            _testJackpotChance = cat.CreateEntry("TestJackpotChance", 0f,
+                description: "TESTING ONLY. Probability 0-1 of forcing a jackpot. Set back to 0 for real odds.");
             _stake = cat.CreateEntry("WheelStake", 10f,
                 description: "Cash staked per spin.");
         }
@@ -144,6 +147,15 @@ namespace CasinoExpansion.Games
             // through the game's float-only channel later.
             int seed = Random.Range(1, RoundState.MaxExactInt);
             int slice = seed % PrizeWheelSlices.Count;
+
+            // Testing aid: the jackpot is otherwise 1 in 53, which is far too rare to verify the
+            // particles and sound. Left at 0 by default so real odds are never silently skewed.
+            float forceChance = _testJackpotChance?.Value ?? 0f;
+            if (forceChance > 0f && Random.value < forceChance)
+            {
+                slice = PrizeWheelSlices.GrandPrize;
+                MelonLogger.Warning($"[wheel] TEST MODE forced jackpot (chance {forceChance:P0})");
+            }
 
             MelonLogger.Msg($"[wheel] round {_round} spinning (seed {seed}, slice {slice})");
             _prop.SetText("...");
