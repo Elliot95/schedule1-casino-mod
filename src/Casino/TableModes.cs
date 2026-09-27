@@ -27,6 +27,13 @@ namespace CasinoExpansion.Casino
         public static ETableGame Get(Component table) =>
             table != null && Modes.TryGetValue(table.GetInstanceID(), out var mode) ? mode : ETableGame.Vanilla;
 
+        public static void Set(Component table, ETableGame game)
+        {
+            if (table == null) return;
+            Modes[table.GetInstanceID()] = game;
+            MelonLogger.Msg($"[table] '{table.name}' now running {Describe(game)}");
+        }
+
         // Index arithmetic over All, so adding a game is one enum entry and one array entry.
         public static readonly ETableGame[] All =
         {

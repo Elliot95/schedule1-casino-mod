@@ -27,6 +27,9 @@ namespace CasinoExpansion
             // On demand, because the startup scan fires before NPCs have finished spawning.
             if (Input.GetKeyDown(KeyCode.F10))
                 Probe.CasinoStaff.Run(LoggerInstance.Msg, LoggerInstance.Warning);
+
+            if (Input.GetKeyDown(KeyCode.F11))
+                Probe.UiDonors.Run(LoggerInstance.Msg, LoggerInstance.Warning);
         }
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
@@ -65,9 +68,6 @@ namespace CasinoExpansion
                     LoggerInstance.Msg("--- applying bet limit changes ---");
                     Tweaks.BetLimits.Apply(LoggerInstance.Msg, LoggerInstance.Warning);
                     Tweaks.CasinoHours.Apply(LoggerInstance.Msg, LoggerInstance.Warning);
-
-                    LoggerInstance.Msg("--- installing table game toggles ---");
-                    Casino.TableToggle.InstallAll(LoggerInstance.Msg, LoggerInstance.Warning);
 
                     LoggerInstance.Msg("--- spawning prize wheel ---");
                     _wheel.Spawn();

@@ -1,0 +1,219 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using HarmonyLib;
+using MelonLoader;
+using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.UI;
+using Object = UnityEngine.Object;
+using BetPanel = Il2CppScheduleOne.Casino.UI.CasinoGameBetPanel;
+using Controller = Il2CppScheduleOne.Casino.CasinoGameController;
+
+namespace CasinoExpansion.Casino
+{
+    // Adds the game selector, rules and ready list to the table's own bet panel.
+    //
+    // Patches CasinoGameBetPanel rather than the two interfaces: BlackjackInterface and
+    // RTBInterface share no base class, but both own one of these and it is typed to the base
+    // controller -- so this is the single seam that covers both tables.
+    public static class TablePanelChrome
+    {
+        private sealed class Chrome
+        {
+            public GameObject Root;
+            public Text_ Selector;
+            public Text_ Rules;
+            public Text_ Players;
+            public GameObject OptionList;
+            public readonly List<Text_> Options = new List<Text_>();
+            public Controller Controller;
+        }
+
+        // TextMeshProUGUI is awkward to name through interop in a few places; this keeps the
+        // call sites readable.
+        private sealed class Text_
+        {
+            public GameObject Go;
+            public Il2CppTMPro.TextMeshProUGUI Label;
+            public Button Button;
+        }
+
+        private static readonly Dictionary<int, Chrome> Panels = new Dictionary<int, Chrome>();
+
+        [HarmonyPatch(typeof(BetPanel), nameof(BetPanel.Open))]
+        internal static class OpenPatch
+        {
+            private static void Postfix(BetPanel __instance, Controller game)
+            {
+                try { Attach(__instance, game); }
+                catch (Exception e) { MelonLogger.Error($"[chrome] attach failed: {e}"); }
+            }
+        }
+
+        [HarmonyPatch(typeof(BetPanel), nameof(BetPanel.Close))]
+        internal static class ClosePatch
+        {
+            private static void Postfix(BetPanel __instance)
+            {
+                if (Panels.TryGetValue(__instance.GetInstanceID(), out var chrome) && chrome.Root != null)
+                    chrome.Root.SetActive(false);
+            }
+        }
+
+        private static void Attach(BetPanel panel, Controller game)
+        {
+            if (panel == null || game == null) return;
+
+            // Built once per panel: the interfaces are persistent singletons, so rebuilding on
+            // every sit-down would pile up duplicates.
+            if (!Panels.TryGetValue(panel.GetInstanceID(), out var chrome))
+            {
+                chrome = Build(panel);
+                if (chrome == null) return;
+                Panels[panel.GetInstanceID()] = chrome;
+            }
+
+            chrome.Controller = game;
+            chrome.Root.SetActive(true);
+            chrome.OptionList.SetActive(false);
+            Refresh(chrome);
+        }
+
+        private static Chrome Build(BetPanel panel)
+        {
+            var readyGo = panel._readyButton != null ? panel._readyButton.gameObject : null;
+            var titleGo = panel._betTitleLabel != null ? panel._betTitleLabel.gameObject : null;
+            if (readyGo == null || titleGo == null)
+            {
+                MelonLogger.Warning("[chrome] bet panel missing ready button or title label");
+                return null;
+            }
+
+            var parent = readyGo.transform.parent;
+            var chrome = new Chrome
+            {
+                Root = new GameObject("ModChrome"),
+            };
+            chrome.Root.transform.SetParent(parent, false);
+
+            // Positions follow the sketch: selector bottom-right of Ready, rules above it,
+            // seated players bottom-left.
+            chrome.Selector = CloneButton(readyGo, chrome.Root.transform, new Vector2(230f, -6f), new Vector2(200f, 44f));
+            chrome.Rules = CloneLabel(titleGo, chrome.Root.transform, new Vector2(230f, 96f), new Vector2(240f, 150f), 15f);
+            chrome.Players = CloneLabel(titleGo, chrome.Root.transform, new Vector2(-230f, 10f), new Vector2(210f, 150f), 16f);
+
+            chrome.Rules.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
+            chrome.Players.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
+
+            chrome.OptionList = new GameObject("Options");
+            chrome.OptionList.transform.SetParent(chrome.Root.transform, false);
+
+            for (int i = 0; i < TableModes.All.Length; i++)
+            {
+                var game = TableModes.All[i];
+                var opt = CloneButton(readyGo, chrome.OptionList.transform,
+                    new Vector2(230f, -50f - i * 40f), new Vector2(200f, 36f));
+                opt.Label.text = TableModes.Describe(game);
+                opt.Label.fontSize = 15f;
+                opt.Button.onClick.AddListener((UnityAction)(() =>
+                {
+                    TableModes.Set(chrome.Controller, game);
+                    chrome.OptionList.SetActive(false);
+                    Refresh(chrome);
+                }));
+                chrome.Options.Add(opt);
+            }
+
+            chrome.Selector.Button.onClick.AddListener((UnityAction)(() =>
+                chrome.OptionList.SetActive(!chrome.OptionList.activeSelf)));
+
+            MelonLogger.Msg($"[chrome] built on panel {panel.name} with {chrome.Options.Count} options");
+            return chrome;
+        }
+
+        // Cloning inherits the URP material, TMP setup, Button and UISelectable that a bare
+        // AddComponent would not, and keeps everything inside the existing canvas hierarchy --
+        // which is where all this project's text bugs came from.
+        private static Text_ CloneButton(GameObject donor, Transform parent, Vector2 pos, Vector2 size)
+        {
+            var go = Object.Instantiate(donor, parent);
+            go.name = "ModButton";
+            go.SetActive(true);
+
+            var rect = go.GetComponent<RectTransform>();
+            rect.anchoredPosition = pos;
+            rect.sizeDelta = size;
+
+            var button = go.GetComponent<Button>();
+            if (button != null) MuteInherited(button.onClick);
+
+            var label = go.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>(true);
+            return new Text_ { Go = go, Label = label, Button = button };
+        }
+
+        private static Text_ CloneLabel(GameObject donor, Transform parent, Vector2 pos, Vector2 size, float fontSize)
+        {
+            var go = Object.Instantiate(donor, parent);
+            go.name = "ModLabel";
+            go.SetActive(true);
+
+            var rect = go.GetComponent<RectTransform>();
+            rect.anchoredPosition = pos;
+            rect.sizeDelta = size;
+
+            var label = go.GetComponent<Il2CppTMPro.TextMeshProUGUI>()
+                        ?? go.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>(true);
+            if (label != null)
+            {
+                label.fontSize = fontSize;
+                label.enableWordWrapping = true;
+            }
+            return new Text_ { Go = go, Label = label };
+        }
+
+        private static void MuteInherited(UnityEngine.Events.UnityEventBase evt)
+        {
+            if (evt == null) return;
+            for (int i = 0; i < evt.GetPersistentEventCount(); i++)
+                evt.SetPersistentListenerState(i, UnityEventCallState.Off);
+        }
+
+        private static void Refresh(Chrome chrome)
+        {
+            if (chrome?.Controller == null) return;
+
+            var game = TableModes.Get(chrome.Controller);
+            if (chrome.Selector?.Label != null)
+                chrome.Selector.Label.text = TableModes.Describe(game);
+            if (chrome.Rules?.Label != null)
+                chrome.Rules.Label.text = string.Join("\n", TableRules.For(game));
+            if (chrome.Players?.Label != null)
+                chrome.Players.Label.text = BuildPlayerList(chrome.Controller);
+        }
+
+        // Solo, one readied player is enough; the vanilla panel's "waiting for other players"
+        // gives no sense of who is actually holding things up.
+        private static string BuildPlayerList(Controller controller)
+        {
+            try
+            {
+                var players = controller.Players;
+                if (players == null) return "Players\n(none)";
+
+                int count = players.CurrentPlayerCount;
+                var lines = new List<string> { $"Players ({count}/{players.PlayerLimit})" };
+
+                for (int i = 0; i < count; i++)
+                {
+                    var p = players.GetPlayer(i);
+                    if (p == null) continue;
+                    lines.Add($"  {p.PlayerName}");
+                }
+
+                return string.Join("\n", lines);
+            }
+            catch (Exception e) { return $"Players\n({e.GetType().Name})"; }
+        }
+    }
+}
