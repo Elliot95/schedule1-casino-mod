@@ -83,13 +83,13 @@ namespace CasinoExpansion.Games
             forward.y = 0f;
             forward = forward.sqrMagnitude < 0.01f ? Vector3.forward : forward.normalized;
 
-            var pos = player.position + forward * 1.8f + Vector3.up * 1.1f;
+            var pos = player.position + forward * 1.8f + Vector3.up * 0.85f;
 
             // Spawning into a wall looks exactly like a rendering bug, which cost a lot of time
             // to rule out once. If the spot is occupied, pull it back toward the player.
             if (Physics.CheckSphere(pos, 0.7f))
             {
-                pos = player.position + forward * 1.1f + Vector3.up * 1.1f;
+                pos = player.position + forward * 1.1f + Vector3.up * 0.85f;
                 MelonLogger.Msg("[wheel] spawn point was obstructed, placed closer instead");
             }
 
@@ -147,7 +147,9 @@ namespace CasinoExpansion.Games
 
             MelonLogger.Msg($"[wheel] round {_round} spinning (seed {seed}, slice {slice})");
             _prop.SetText("...");
+            _prop.Effects.OnSpinStart();
             yield return _prop.Spin(slice);
+            _prop.Effects.OnSpinEnd();
 
             Resolve(slice, stake);
             _busy = false;
@@ -161,6 +163,7 @@ namespace CasinoExpansion.Games
             if (mult > 0f) Bank.ApplyPayout(GameId, _round, stake * mult);
 
             _prop.SetText(mult > 0f ? $"WON ${stake * mult:N0}" : $"${Stake:N0}");
+            _prop.Effects.OnResult(slice == PrizeWheelSlices.GrandPrize, mult);
         }
 
     }

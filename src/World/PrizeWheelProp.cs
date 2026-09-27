@@ -20,6 +20,7 @@ namespace CasinoExpansion.World
         private const int TextureSize = 256;
 
         public GameObject Root { get; private set; }
+        public WheelEffects Effects { get; } = new WheelEffects();
         public GameObject SpinButtonAnchor { get; private set; }
         public GameObject BetUpAnchor { get; private set; }
         public GameObject BetDownAnchor { get; private set; }
@@ -48,6 +49,7 @@ namespace CasinoExpansion.World
 
             AddPointer();
             AddBody();
+            AddConcealerBar();
             AddControlBezel();
             AddReadout();
             SpinButtonAnchor = AddSpinButton();
@@ -58,6 +60,9 @@ namespace CasinoExpansion.World
             // does not include it. Door is known good: visible in game and inside
             // InteractionManager's search mask, so the prop stays clickable.
             SetLayerRecursive(Root, RenderLayer);
+
+            Effects.Build(Root.transform, new Vector3(0f, -0.84f, 0.02f),
+                MelonLoader.MelonLogger.Msg, MelonLoader.MelonLogger.Warning);
 
             LogCameras();
             MelonLoader.MelonCoroutines.Start(LogStateAfterCulling());
@@ -109,6 +114,8 @@ namespace CasinoExpansion.World
         // networked object has no valid spawn identity and would misbehave for remote clients.
         private void AddBody()
         {
+            if (TryCloneBillboard()) return;
+
             var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
             body.name = "Body";
             body.transform.SetParent(Root.transform, false);
@@ -119,6 +126,47 @@ namespace CasinoExpansion.World
             var renderer = body.GetComponent<MeshRenderer>();
             ApplyGameShader(renderer);
             SetColor(renderer.material, new Color(0.35f, 0.05f, 0.08f));
+        }
+
+        // The roadside billboard at the Slums Gas Station: a flat panel, already framed, which
+        // is a far better backboard than a primitive cube. Its width runs along Z rather than X,
+        // so it is rotated to face the player, and its advertising material is replaced with flat
+        // colour -- the artwork would otherwise read as a advert rather than a machine.
+        private bool TryCloneBillboard()
+        {
+            try
+            {
+                var donor = Object.FindObjectsOfType<MeshRenderer>()
+                    .FirstOrDefault(r => r.transform.name.StartsWith("Billboard side"));
+                if (donor == null) return false;
+
+                var board = Object.Instantiate(donor.gameObject);
+                board.name = "Backboard";
+
+                foreach (var io in board.GetComponentsInChildren<Il2CppScheduleOne.Interaction.InteractableObject>(true))
+                    Object.Destroy(io.gameObject);
+                foreach (var col in board.GetComponentsInChildren<Collider>(true))
+                    Object.Destroy(col);
+
+                board.transform.SetParent(Root.transform, false);
+                board.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                board.transform.localPosition = new Vector3(0f, -0.05f, 0.09f);
+                board.transform.localScale = new Vector3(1f, 0.40f, 0.155f);
+
+                foreach (var r in board.GetComponentsInChildren<MeshRenderer>(true))
+                {
+                    ApplyGameShader(r);
+                    SetColor(r.material, new Color(0.30f, 0.06f, 0.08f));
+                }
+
+                MelonLoader.MelonLogger.Msg($"[wheel] cloned billboard backboard, bounds {CombinedBounds(board).size}");
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                MelonLoader.MelonLogger.Warning($"[wheel] billboard clone failed, using plain panel: {e.Message}");
+                return false;
+            }
         }
 
         private bool TryCloneCabinet()
@@ -222,33 +270,29 @@ namespace CasinoExpansion.World
                                         $"_BaseMap={m.HasProperty("_BaseMap")} _MainTex={m.HasProperty("_MainTex")}");
         }
 
-        // A "<" sitting just inside the rim. The previous wedge hung outside the disc and
-        // past the body edge, which looked bolted on rather than part of the machine.
+        // Two thin arms meeting at a point, so it reads as a "<" chevron rather than the solid
+        // triangle it was. Kept small and inside the rim -- nothing should overhang the body.
         private void AddPointer()
         {
             var pointer = new GameObject("Pointer");
-            pointer.transform.SetParent(_disc.parent, false);
-            pointer.transform.localPosition = new Vector3(0.36f, DiscY, -0.11f);
+            pointer.transform.SetParent(Root.transform, false);
+            pointer.transform.localPosition = new Vector3(0.335f, DiscY, -0.10f);
 
-            var mesh = new Mesh { name = "PrizeWheelPointer" };
-            const float len = 0.17f, halfH = 0.085f, d = 0.02f;
-            mesh.vertices = new[]
-            {
-                new Vector3(-len, 0f, -d), new Vector3(0f,  halfH, -d), new Vector3(0f, -halfH, -d),
-                new Vector3(-len, 0f,  d), new Vector3(0f,  halfH,  d), new Vector3(0f, -halfH,  d),
-            };
-            mesh.triangles = new[]
-            {
-                0, 1, 2,   3, 5, 4,
-                0, 2, 5,   0, 5, 3,
-                0, 3, 4,   0, 4, 1,
-                1, 4, 5,   1, 5, 2,
-            };
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
+            AddChevronArm(pointer.transform, +32f);
+            AddChevronArm(pointer.transform, -32f);
+        }
 
-            pointer.AddComponent<MeshFilter>().mesh = mesh;
-            var renderer = pointer.AddComponent<MeshRenderer>();
+        private void AddChevronArm(Transform parent, float angle)
+        {
+            var arm = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            arm.name = "Arm";
+            arm.transform.SetParent(parent, false);
+            arm.transform.localRotation = Quaternion.Euler(0f, 0f, angle);
+            arm.transform.localPosition = arm.transform.localRotation * new Vector3(0.035f, 0f, 0f);
+            arm.transform.localScale = new Vector3(0.075f, 0.016f, 0.016f);
+            Object.Destroy(arm.GetComponent<Collider>());
+
+            var renderer = arm.GetComponent<MeshRenderer>();
             ApplyGameShader(renderer);
             SetColor(renderer.material, new Color(0.98f, 0.88f, 0.35f));
         }
@@ -260,6 +304,22 @@ namespace CasinoExpansion.World
 
         // A recessed strip behind the readout and pads so they read as one control group rather
         // than three unrelated objects floating on the front.
+        // Sits across the bottom of the board, in front of the particle emitters, so bursts read
+        // as rising from behind the machine instead of spawning at a visible point.
+        private void AddConcealerBar()
+        {
+            var bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            bar.name = "ConcealerBar";
+            bar.transform.SetParent(Root.transform, false);
+            bar.transform.localPosition = new Vector3(0f, -0.80f, -0.12f);
+            bar.transform.localScale = new Vector3(1.30f, 0.16f, 0.14f);
+            Object.Destroy(bar.GetComponent<Collider>());
+
+            var renderer = bar.GetComponent<MeshRenderer>();
+            ApplyGameShader(renderer);
+            SetColor(renderer.material, new Color(0.10f, 0.10f, 0.12f));
+        }
+
         private void AddControlBezel()
         {
             var bezel = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -429,24 +489,32 @@ namespace CasinoExpansion.World
         // there means no extra offset -- keep this in step with the pointer's position.
         public static float AngleForSlice(int slice) => -(slice + 0.5f) / SliceCount * 360f;
 
-        public IEnumerator Spin(int slice, float duration = 3.2f)
+        private const int SpinRotations = 10;
+        private float _angle;   // accumulated, never read back from the transform
+
+        public IEnumerator Spin(int slice, float duration = 3.6f)
         {
             if (_disc == null) yield break;
 
-            float from = _disc.localEulerAngles.z;
-            float to = AngleForSlice(slice) - 360f * 4f;   // four decorative full turns
-            float t = 0f;
+            // Always clockwise. Reading the angle back off the transform gives a wrapped 0-360
+            // value, and LerpAngle then takes the SHORTER path -- which made spins visibly run
+            // backwards. Accumulating our own angle and plain-Lerping keeps direction honest.
+            float from = _angle;
+            float to = AngleForSlice(slice);
+            while (to > from - 360f * SpinRotations) to -= 360f;
 
+            float t = 0f;
             while (t < duration)
             {
                 t += Time.deltaTime;
                 float p = Mathf.Clamp01(t / duration);
                 float eased = 1f - Mathf.Pow(1f - p, 3f);   // ease-out so it slows into the slice
-                _disc.localEulerAngles = new Vector3(0f, 0f, Mathf.LerpAngle(from, to, eased));
+                _disc.localEulerAngles = new Vector3(0f, 0f, Mathf.Lerp(from, to, eased));
                 yield return null;
             }
 
-            _disc.localEulerAngles = new Vector3(0f, 0f, AngleForSlice(slice));
+            _angle = to;
+            _disc.localEulerAngles = new Vector3(0f, 0f, to);
         }
     }
 }

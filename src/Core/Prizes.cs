@@ -49,11 +49,10 @@ namespace CasinoExpansion.Core
 
         public static void Calibrate(float stake, float targetRtp, Action<string> log, Action<string> warn)
         {
-            // Smallest wheel whose jackpot share fits under target, flooring rather than rounding
-            // up so the wheel never beats the slots.
-            int count = PrizeWheelSlices.MinCount;
-            while (targetRtp > 0f && (float)GrandPrizeMultiplier / count > targetRtp) count++;
-            PrizeWheelSlices.SetCount(count);
+            // Slice count is FIXED, never derived from the measured RTP. Sizing the wheel from a
+            // local measurement meant two clients could build different-sized wheels, so the same
+            // slice index would be a different wedge and the rendered angle would diverge.
+            int count = PrizeWheelSlices.Count;
 
             _table = new int[count];
             _table[PrizeWheelSlices.GrandPrize] = GrandPrizeMultiplier;
@@ -115,9 +114,9 @@ namespace CasinoExpansion.Core
         // Slices beyond the cards and the jackpot are plain losers. Their only job is to dilute
         // the jackpot: a fixed 100x on 1 of 53 is 189% RTP, so the wheel needs more slices, not
         // smaller payouts, to come back under target.
-        public static int Count { get; private set; } = MinCount;
-
-        public static void SetCount(int count) => Count = Math.Max(MinCount, count);
+        // Deliberately a constant: geometry must match across clients, and deriving it from a
+        // locally measured RTP made that impossible to guarantee.
+        public const int Count = MinCount;
 
         public static bool IsCard(int slice) => slice >= 0 && slice < CardCount;
     }
