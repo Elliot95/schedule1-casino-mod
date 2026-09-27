@@ -99,9 +99,24 @@ namespace CasinoExpansion.Casino
 
             // Positions follow the sketch: selector bottom-right of Ready, rules above it,
             // seated players bottom-left.
-            chrome.Selector = CloneButton(readyGo, chrome.Root.transform, new Vector2(230f, -6f), new Vector2(200f, 44f));
-            chrome.Rules = CloneLabel(titleGo, chrome.Root.transform, new Vector2(230f, 96f), new Vector2(240f, 150f), 15f);
-            chrome.Players = CloneLabel(titleGo, chrome.Root.transform, new Vector2(-230f, 10f), new Vector2(210f, 150f), 16f);
+            // Measured, not guessed: container is 504x240 and Ready sits at (0,-81.5) sized
+            // 210x40. Half-width is therefore 252, so anything wider than ~140 centred beyond
+            // x=180 spills onto the felt -- which is exactly what the first pass did.
+            const float HalfW = 252f;
+
+            // Selector tucks inside, level with Ready and clear of it.
+            chrome.Selector = CloneButton(readyGo, chrome.Root.transform,
+                new Vector2(168f, -81.5f), new Vector2(150f, 40f));
+
+            // Wings sit deliberately outside the container, each on its own backing so they read
+            // as attached panels rather than text floating over the table.
+            MakeBacking(readyGo, chrome.Root.transform, new Vector2(HalfW + 108f, 24f), new Vector2(212f, 168f));
+            chrome.Rules = CloneLabel(titleGo, chrome.Root.transform,
+                new Vector2(HalfW + 108f, 24f), new Vector2(196f, 156f), 14f);
+
+            MakeBacking(readyGo, chrome.Root.transform, new Vector2(-(HalfW + 100f), 24f), new Vector2(196f, 168f));
+            chrome.Players = CloneLabel(titleGo, chrome.Root.transform,
+                new Vector2(-(HalfW + 100f), 24f), new Vector2(180f, 156f), 15f);
 
             chrome.Rules.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
             chrome.Players.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
@@ -112,8 +127,9 @@ namespace CasinoExpansion.Casino
             for (int i = 0; i < TableModes.All.Length; i++)
             {
                 var game = TableModes.All[i];
+                // Drops downward from the selector, like a dropdown list.
                 var opt = CloneButton(readyGo, chrome.OptionList.transform,
-                    new Vector2(230f, -50f - i * 40f), new Vector2(200f, 36f));
+                    new Vector2(168f, -113f - i * 34f), new Vector2(150f, 32f));
                 opt.Label.text = TableModes.Describe(game);
                 opt.Label.fontSize = 15f;
                 opt.Button.onClick.AddListener((UnityAction)(() =>
@@ -125,6 +141,7 @@ namespace CasinoExpansion.Casino
                 chrome.Options.Add(opt);
             }
 
+            chrome.Selector.Label.fontSize = 15f;
             chrome.Selector.Button.onClick.AddListener((UnityAction)(() =>
                 chrome.OptionList.SetActive(!chrome.OptionList.activeSelf)));
 
@@ -157,6 +174,28 @@ namespace CasinoExpansion.Casino
 
             var label = go.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>(true);
             return new Text_ { Go = go, Label = label, Button = button };
+        }
+
+        // A dimmed clone of the ready button, used purely as a background plate behind the
+        // wings so they look attached to the panel.
+        private static void MakeBacking(GameObject donor, Transform parent, Vector2 pos, Vector2 size)
+        {
+            var go = Object.Instantiate(donor, parent);
+            go.name = "ModBacking";
+            go.SetActive(true);
+
+            var rect = go.GetComponent<RectTransform>();
+            rect.anchoredPosition = pos;
+            rect.sizeDelta = size;
+
+            var button = go.GetComponent<Button>();
+            if (button != null) { MuteInherited(button.onClick); button.interactable = false; }
+
+            var image = go.GetComponent<Image>();
+            if (image != null) image.color = new Color(0.04f, 0.10f, 0.06f, 0.82f);
+
+            var label = go.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>(true);
+            if (label != null) label.text = "";
         }
 
         private static Text_ CloneLabel(GameObject donor, Transform parent, Vector2 pos, Vector2 size, float fontSize)
