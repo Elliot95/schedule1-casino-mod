@@ -20,6 +20,7 @@ namespace CasinoExpansion.World
         private const int TextureSize = 256;
 
         public GameObject Root { get; private set; }
+        public GameObject SpinButtonAnchor { get; private set; }
         public GameObject BetUpAnchor { get; private set; }
         public GameObject BetDownAnchor { get; private set; }
         private Transform _disc;
@@ -49,6 +50,7 @@ namespace CasinoExpansion.World
             AddBody();
             AddControlBezel();
             AddReadout();
+            SpinButtonAnchor = AddSpinButton();
             BetUpAnchor = AddBetPad("BetUp", 0.30f, new Color(0.25f, 0.62f, 0.28f));
             BetDownAnchor = AddBetPad("BetDown", -0.30f, new Color(0.62f, 0.25f, 0.25f));
 
@@ -226,10 +228,10 @@ namespace CasinoExpansion.World
         {
             var pointer = new GameObject("Pointer");
             pointer.transform.SetParent(_disc.parent, false);
-            pointer.transform.localPosition = new Vector3(0.40f, DiscY, -0.03f);
+            pointer.transform.localPosition = new Vector3(0.36f, DiscY, -0.11f);
 
             var mesh = new Mesh { name = "PrizeWheelPointer" };
-            const float len = 0.10f, halfH = 0.055f, d = 0.012f;
+            const float len = 0.17f, halfH = 0.085f, d = 0.02f;
             mesh.vertices = new[]
             {
                 new Vector3(-len, 0f, -d), new Vector3(0f,  halfH, -d), new Vector3(0f, -halfH, -d),
@@ -263,8 +265,8 @@ namespace CasinoExpansion.World
             var bezel = GameObject.CreatePrimitive(PrimitiveType.Cube);
             bezel.name = "ControlBezel";
             bezel.transform.SetParent(Root.transform, false);
-            bezel.transform.localPosition = new Vector3(0f, ControlsY, -0.02f);
-            bezel.transform.localScale = new Vector3(0.86f, 0.19f, 0.06f);
+            bezel.transform.localPosition = new Vector3(0f, ControlsY + 0.10f, -0.02f);
+            bezel.transform.localScale = new Vector3(0.86f, 0.46f, 0.06f);
             Object.Destroy(bezel.GetComponent<Collider>());
 
             var renderer = bezel.GetComponent<MeshRenderer>();
@@ -296,6 +298,23 @@ namespace CasinoExpansion.World
         public void SetText(string text)
         {
             if (_readout != null) _readout.text = text;
+        }
+
+        // A real button on the front, sat directly above the stake strip, replacing the slot
+        // machine handle mesh that came along with the donor and floated beside the wheel.
+        private GameObject AddSpinButton()
+        {
+            var button = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            button.name = "SpinButton";
+            button.transform.SetParent(Root.transform, false);
+            button.transform.localPosition = new Vector3(0f, ControlsY + 0.20f, -0.06f);
+            button.transform.localScale = new Vector3(0.34f, 0.11f, 0.05f);
+            Object.Destroy(button.GetComponent<Collider>());
+
+            var renderer = button.GetComponent<MeshRenderer>();
+            ApplyGameShader(renderer);
+            SetColor(renderer.material, new Color(0.85f, 0.65f, 0.12f));
+            return button;
         }
 
         private GameObject AddBetPad(string name, float x, Color colour)

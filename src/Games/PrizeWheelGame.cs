@@ -47,8 +47,10 @@ namespace CasinoExpansion.Games
             var (pos, rot) = ResolvePlacement(player.transform);
             _prop.Build(pos, rot);
 
-            _spinInteractable = InteractableFactory.Attach(_prop.Root, SpinMessage(), new Vector3(1.3f, 1.3f, 0.4f),
-                (UnityAction)OnInteract, MelonLogger.Msg, MelonLogger.Warning);
+            // Spin is driven by the button on the front, not the whole cabinet: a body-sized
+            // collider caught the player's aim from well off the prop.
+            _spinInteractable = InteractableFactory.Attach(_prop.SpinButtonAnchor, SpinMessage(),
+                new Vector3(1.15f, 1.5f, 1.6f), (UnityAction)OnInteract, MelonLogger.Msg, MelonLogger.Warning);
 
             InteractableFactory.Attach(_prop.BetUpAnchor, "Raise bet", new Vector3(1.2f, 1.4f, 1.2f),
                 (UnityAction)(() => ChangeBet(1)), MelonLogger.Msg, MelonLogger.Warning);
