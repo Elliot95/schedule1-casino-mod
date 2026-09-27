@@ -128,7 +128,14 @@ namespace CasinoExpansion.Casino
             chrome.Selector.Button.onClick.AddListener((UnityAction)(() =>
                 chrome.OptionList.SetActive(!chrome.OptionList.activeSelf)));
 
-            MelonLogger.Msg($"[chrome] built on panel {panel.name} with {chrome.Options.Count} options");
+            // Positions were guessed from screenshots and sit outside the panel; log the real
+            // geometry so they can be placed against actual numbers.
+            var containerRect = panel._container != null ? panel._container.GetComponent<RectTransform>() : null;
+            var readyRect = readyGo.GetComponent<RectTransform>();
+            MelonLogger.Msg($"[chrome] built on panel {panel.name} with {chrome.Options.Count} options. " +
+                            $"container size={(containerRect != null ? containerRect.rect.size.ToString() : "?")} " +
+                            $"ready pos={readyRect.anchoredPosition} size={readyRect.rect.size} " +
+                            $"parent={readyGo.transform.parent.name}");
             return chrome;
         }
 

@@ -14,14 +14,21 @@ namespace CasinoExpansion.Probe
         {
             try
             {
+                // Index, never LINQ: Take() over an Il2CppReferenceArray silently yields nothing,
+                // which is why an earlier run printed a count of 8 and then no rows at all.
                 var dropdowns = Resources.FindObjectsOfTypeAll<Il2CppTMPro.TMP_Dropdown>();
                 log($"[ui] TMP_Dropdown instances: {dropdowns.Length}");
-                foreach (var d in dropdowns.Take(10))
-                    log($"   {Path(d.transform)}  options={d.options?.Count ?? -1}  active={d.gameObject.activeInHierarchy}");
+                for (int i = 0; i < dropdowns.Length && i < 10; i++)
+                {
+                    var d = dropdowns[i];
+                    if (d == null) continue;
+                    log($"   [{i}] {Path(d.transform)}  template={(d.template != null)}  active={d.gameObject.activeInHierarchy}");
+                }
 
                 var plain = Resources.FindObjectsOfTypeAll<UnityEngine.UI.Dropdown>();
                 log($"[ui] legacy Dropdown instances: {plain.Length}");
-                foreach (var d in plain.Take(5)) log($"   {Path(d.transform)}");
+                for (int i = 0; i < plain.Length && i < 5; i++)
+                    if (plain[i] != null) log($"   [{i}] {Path(plain[i].transform)}");
 
                 // The Ride the Bus answer panel is a ready-made choose-one-of-N in the casino's
                 // own UI, so it needs no restyling to look native.
