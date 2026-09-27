@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using UnityEngine;
 using CasinoExpansion.Core;
 using Object = UnityEngine.Object;
@@ -19,6 +20,8 @@ namespace CasinoExpansion.World
         private const int TextureSize = 256;
 
         public GameObject Root { get; private set; }
+        public GameObject BetUpAnchor { get; private set; }
+        public GameObject BetDownAnchor { get; private set; }
         private Transform _disc;
 
         public void Build(Vector3 position, Quaternion rotation)
@@ -42,6 +45,9 @@ namespace CasinoExpansion.World
 
             AddPointer();
             AddBody();
+            AddReadout();
+            BetUpAnchor = AddBetPad("BetUp", 0.48f, new Color(0.25f, 0.55f, 0.25f));
+            BetDownAnchor = AddBetPad("BetDown", -0.48f, new Color(0.55f, 0.25f, 0.25f));
 
             // Layer 0 (Default) casts shadows but never rendered -- the camera's culling mask
             // does not include it. Door is known good: visible in game and inside
@@ -167,17 +173,81 @@ namespace CasinoExpansion.World
                                         $"_BaseMap={m.HasProperty("_BaseMap")} _MainTex={m.HasProperty("_MainTex")}");
         }
 
+        // A wedge pointing down into the rim, so the winning slice is unambiguous. The cube it
+        // replaced only marked the top of the wheel without indicating anything.
         private void AddPointer()
         {
-            var pointer = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            pointer.name = "Pointer";
+            var pointer = new GameObject("Pointer");
             pointer.transform.SetParent(Root.transform, false);
-            pointer.transform.localPosition = new Vector3(0f, 0.56f, -0.03f);
-            pointer.transform.localScale = new Vector3(0.05f, 0.14f, 0.05f);
-            Object.Destroy(pointer.GetComponent<Collider>());
-            var pointerRenderer = pointer.GetComponent<MeshRenderer>();
-            ApplyGameShader(pointerRenderer);
-            SetColor(pointerRenderer.material, new Color(0.98f, 0.88f, 0.35f));
+            // Right edge at 3 o'clock, rotated to aim inward at the rim.
+            pointer.transform.localPosition = new Vector3(0.585f, 0f, -0.04f);
+            pointer.transform.localRotation = Quaternion.Euler(0f, 0f, -90f);
+
+            var mesh = new Mesh { name = "PrizeWheelPointer" };
+            const float w = 0.055f, h = 0.13f, d = 0.02f;
+            mesh.vertices = new[]
+            {
+                new Vector3(-w, h, -d), new Vector3(w, h, -d), new Vector3(0f, -h, -d),  // front
+                new Vector3(-w, h,  d), new Vector3(w, h,  d), new Vector3(0f, -h,  d),  // back
+            };
+            mesh.triangles = new[]
+            {
+                0, 2, 1,   3, 4, 5,                 // the two faces
+                0, 1, 4,   0, 4, 3,                 // top edge
+                1, 2, 5,   1, 5, 4,                 // right edge
+                2, 0, 3,   2, 3, 5,                 // left edge
+            };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            pointer.AddComponent<MeshFilter>().mesh = mesh;
+            var renderer = pointer.AddComponent<MeshRenderer>();
+            ApplyGameShader(renderer);
+            SetColor(renderer.material, new Color(0.98f, 0.88f, 0.35f));
+        }
+
+        // Small pads either side of the stem, standing in for the slot machine's up/down bet
+        // buttons. The interactable itself is attached by the game layer.
+        private Il2CppTMPro.TextMeshPro _readout;
+
+        // Shows the stake, and the win when a round resolves. Font is borrowed from one already
+        // loaded by the game so the text matches the rest of the UI.
+        private void AddReadout()
+        {
+            var go = new GameObject("Readout");
+            go.transform.SetParent(Root.transform, false);
+            go.transform.localPosition = new Vector3(0f, -0.72f, -0.05f);
+
+            _readout = go.AddComponent<Il2CppTMPro.TextMeshPro>();
+            _readout.fontSize = 2.2f;
+            _readout.alignment = Il2CppTMPro.TextAlignmentOptions.Center;
+            _readout.color = new Color(0.98f, 0.88f, 0.35f);
+            _readout.rectTransform.sizeDelta = new Vector2(1.1f, 0.3f);
+
+            var font = Resources.FindObjectsOfTypeAll<Il2CppTMPro.TMP_FontAsset>().FirstOrDefault();
+            if (font != null) _readout.font = font;
+
+            SetText("");
+        }
+
+        public void SetText(string text)
+        {
+            if (_readout != null) _readout.text = text;
+        }
+
+        private GameObject AddBetPad(string name, float x, Color colour)
+        {
+            var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            pad.name = name;
+            pad.transform.SetParent(Root.transform, false);
+            pad.transform.localPosition = new Vector3(x, -0.62f, -0.02f);
+            pad.transform.localScale = new Vector3(0.16f, 0.12f, 0.06f);
+            Object.Destroy(pad.GetComponent<Collider>());
+
+            var renderer = pad.GetComponent<MeshRenderer>();
+            ApplyGameShader(renderer);
+            SetColor(renderer.material, colour);
+            return pad;
         }
 
         private static Mesh BuildDisc()
@@ -273,6 +343,8 @@ namespace CasinoExpansion.World
             _disc = null;
         }
 
+        // Slice 0 starts at 3 o'clock in the face texture, so landing a slice under the pointer
+        // there means no extra offset -- keep this in step with the pointer's position.
         public static float AngleForSlice(int slice) => -(slice + 0.5f) / SliceCount * 360f;
 
         public IEnumerator Spin(int slice, float duration = 3.2f)

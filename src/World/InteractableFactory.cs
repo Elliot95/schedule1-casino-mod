@@ -14,9 +14,7 @@ namespace CasinoExpansion.World
         public static IntObj Attach(GameObject target, string hoverMessage, Vector3 colliderSize,
             UnityAction onInteract, System.Action<string> log, System.Action<string> warn)
         {
-            var donor = Object.FindObjectsOfType<Il2CppScheduleOne.Doors.StaticDoor>()
-                .FirstOrDefault(d => d.IntObj != null)?.IntObj;
-
+            var donor = FindDonor();
             if (donor == null) { warn("no InteractableObject donor found; prop will not be interactable"); return null; }
 
             var clone = Object.Instantiate(donor.gameObject, target.transform);
@@ -55,6 +53,21 @@ namespace CasinoExpansion.World
 
             log($"   interactable at {clone.transform.position}, collider world bounds {col.bounds.size}");
             return io;
+        }
+
+        // Prefer the slot machine's own controls: they are purpose-built casino interactables, so
+        // the prompt and feel match the machines beside the wheel rather than a door.
+        private static IntObj FindDonor()
+        {
+            var slot = Object.FindObjectOfType<Il2CppScheduleOne.Casino.SlotMachine>();
+            if (slot != null)
+            {
+                if (slot.HandleIntObj != null) return slot.HandleIntObj;
+                if (slot.UpButton != null) return slot.UpButton;
+            }
+
+            return Object.FindObjectsOfType<Il2CppScheduleOne.Doors.StaticDoor>()
+                .FirstOrDefault(d => d.IntObj != null)?.IntObj;
         }
 
         private static void MuteInherited(UnityEvent evt)

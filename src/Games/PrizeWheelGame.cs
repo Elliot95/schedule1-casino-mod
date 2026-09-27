@@ -15,6 +15,7 @@ namespace CasinoExpansion.Games
         private readonly PrizeWheelProp _prop = new PrizeWheelProp();
         private int _round;
         private bool _busy;
+        private Il2CppScheduleOne.Interaction.InteractableObject _spinInteractable;
 
         private static MelonPreferences_Entry<string> _position;
         private static MelonPreferences_Entry<float> _stake;
@@ -27,8 +28,12 @@ namespace CasinoExpansion.Games
                 description: "Cash staked per spin.");
         }
 
+        // Mirrors the slot machines' ladder shape but runs higher, capped at 1500.
+        public static readonly int[] BetLadder = { 5, 10, 25, 50, 100, 250, 500, 1000, 1500 };
+        private static int _betIndex = 1;   // default 10, matching the machines' opening bet
+
         // Calibration needs the stake before any round runs.
-        public static float Stake => System.Math.Max(1f, _stake?.Value ?? 10f);
+        public static float Stake => BetLadder[Mathf.Clamp(_betIndex, 0, BetLadder.Length - 1)];
 
         public bool IsSpawned => _prop.Root != null;
 
@@ -42,9 +47,15 @@ namespace CasinoExpansion.Games
             var (pos, rot) = ResolvePlacement(player.transform);
             _prop.Build(pos, rot);
 
-            InteractableFactory.Attach(_prop.Root, "Spin the wheel", new Vector3(1.3f, 1.3f, 0.4f),
+            _spinInteractable = InteractableFactory.Attach(_prop.Root, SpinMessage(), new Vector3(1.3f, 1.3f, 0.4f),
                 (UnityAction)OnInteract, MelonLogger.Msg, MelonLogger.Warning);
 
+            InteractableFactory.Attach(_prop.BetUpAnchor, "Raise bet", new Vector3(1.2f, 1.4f, 1.2f),
+                (UnityAction)(() => ChangeBet(1)), MelonLogger.Msg, MelonLogger.Warning);
+            InteractableFactory.Attach(_prop.BetDownAnchor, "Lower bet", new Vector3(1.2f, 1.4f, 1.2f),
+                (UnityAction)(() => ChangeBet(-1)), MelonLogger.Msg, MelonLogger.Warning);
+
+            _prop.SetText($"${Stake:N0}");
             MelonLogger.Msg($"[wheel] spawned at {pos.x:0.##},{pos.y:0.##},{pos.z:0.##} " +
                             $"(player at {player.transform.position.x:0.##},{player.transform.position.y:0.##},{player.transform.position.z:0.##})");
         }
@@ -91,6 +102,21 @@ namespace CasinoExpansion.Games
             Spawn();
         }
 
+        private static string SpinMessage() => $"Spin the wheel (${Stake:N0})";
+
+        private void ChangeBet(int direction)
+        {
+            if (_busy) return;
+
+            int next = Mathf.Clamp(_betIndex + direction, 0, BetLadder.Length - 1);
+            if (next == _betIndex) return;
+
+            _betIndex = next;
+            _spinInteractable?.SetMessage(SpinMessage());
+            _prop.SetText($"${Stake:N0}");
+            MelonLogger.Msg($"[wheel] bet now {Stake:N0}");
+        }
+
         private void OnInteract()
         {
             if (_busy) return;
@@ -118,6 +144,7 @@ namespace CasinoExpansion.Games
             int slice = seed % PrizeWheelSlices.Count;
 
             MelonLogger.Msg($"[wheel] round {_round} spinning (seed {seed}, slice {slice})");
+            _prop.SetText("...");
             yield return _prop.Spin(slice);
 
             Resolve(slice, stake);
@@ -130,6 +157,8 @@ namespace CasinoExpansion.Games
 
             float mult = Prizes.CashMultiplier(slice);
             if (mult > 0f) Bank.ApplyPayout(GameId, _round, stake * mult);
+
+            _prop.SetText(mult > 0f ? $"WON ${stake * mult:N0}" : $"${Stake:N0}");
         }
 
     }
