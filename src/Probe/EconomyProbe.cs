@@ -23,6 +23,7 @@ namespace CasinoExpansion.Probe
             Interaction(log, warn);
             CloneSources(log, warn);
             PrizeIds(log, warn);
+            PropScout.Run(log, warn);
         }
 
         private static void Slots(Action<string> log, Action<string> warn)

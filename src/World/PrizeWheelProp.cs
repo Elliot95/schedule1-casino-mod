@@ -107,8 +107,6 @@ namespace CasinoExpansion.World
         // networked object has no valid spawn identity and would misbehave for remote clients.
         private void AddBody()
         {
-            if (TryCloneCabinet()) return;
-
             var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
             body.name = "Body";
             body.transform.SetParent(Root.transform, false);
