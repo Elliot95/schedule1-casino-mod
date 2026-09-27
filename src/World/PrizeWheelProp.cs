@@ -121,18 +121,29 @@ namespace CasinoExpansion.World
         {
             if (_gameShader != null) return _gameShader;
 
-            foreach (var r in Object.FindObjectsOfType<MeshRenderer>())
+            // Ask by name. Harvesting whatever turned up first was non-deterministic --
+            // FindObjectsOfType has no defined order -- and one run grabbed the weather cloud
+            // shader, which draws nothing at prop scale and has no texture slot.
+            _gameShader = Shader.Find("Universal Render Pipeline/Lit");
+            if (_gameShader != null)
             {
-                var m = r.sharedMaterial;
-                if (m == null || m.shader == null) continue;
-                if (m.shader.name == "Standard") continue;   // the one we know does not draw
-
-                _gameShader = m.shader;
-                MelonLoader.MelonLogger.Msg($"[wheel] harvested shader '{_gameShader.name}' from '{r.name}'");
+                MelonLoader.MelonLogger.Msg($"[wheel] using shader '{_gameShader.name}'");
                 return _gameShader;
             }
 
-            MelonLoader.MelonLogger.Warning("[wheel] found no non-Standard shader to harvest");
+            // Fallback: require a real surface shader, not an effect one.
+            foreach (var r in Object.FindObjectsOfType<MeshRenderer>())
+            {
+                var m = r.sharedMaterial;
+                if (m?.shader == null || m.shader.name == "Standard") continue;
+                if (!m.HasProperty("_BaseMap")) continue;
+
+                _gameShader = m.shader;
+                MelonLoader.MelonLogger.Msg($"[wheel] harvested fallback shader '{_gameShader.name}' from '{r.name}'");
+                return _gameShader;
+            }
+
+            MelonLoader.MelonLogger.Warning("[wheel] no usable shader found");
             return null;
         }
 

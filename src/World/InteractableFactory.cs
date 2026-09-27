@@ -24,6 +24,11 @@ namespace CasinoExpansion.World
             clone.transform.localPosition = Vector3.zero;
             clone.transform.localRotation = Quaternion.identity;
 
+            // The donor's scale comes along with the clone. Left alone it multiplies the
+            // collider below, giving the prop a hit box far larger than the visible wheel and
+            // letting it catch the player's aim from well off target.
+            clone.transform.localScale = Vector3.one;
+
             var io = clone.GetComponent<IntObj>();
             if (io == null) { warn("cloned object had no InteractableObject"); Object.Destroy(clone); return null; }
 
@@ -48,6 +53,7 @@ namespace CasinoExpansion.World
             col.size = colliderSize;
             col.isTrigger = false;
 
+            log($"   interactable at {clone.transform.position}, collider world bounds {col.bounds.size}");
             return io;
         }
 
