@@ -22,6 +22,7 @@ namespace CasinoExpansion
         public override void OnUpdate()
         {
             Casino.TableSession.TickAll();
+            Casino.TablePanelChrome.TickRefresh();
 
             if (Input.GetKeyDown(KeyCode.F9))
                 _wheel.Respawn();

@@ -61,12 +61,43 @@ namespace CasinoExpansion.Casino
         Outcome Resolve(HandSet hands, float stake);
     }
 
+    // Implemented alongside ITableGame by any game with a decision in the middle of the round --
+    // Red Dog's raise now, blackjack's hit/stand and double later.
+    //
+    // Deal puts down only what the player decides on; Decide then asks, may draw further cards
+    // into the same HandSet, and may raise the wager. Resolve stays pure and sees the finished
+    // hands, so the money rule is unchanged: every client reaches the same verdict from the same
+    // cards. Only the local player's answer differs, and that is carried in the Wager.
+    public interface IDecidingGame
+    {
+        System.Collections.IEnumerator Decide(TableSession session, HandSet hands, Deck deck, Wager wager);
+    }
+
+    // The live stake for a round in progress. Games raise through Add rather than writing the
+    // total, so the session can take the extra money at the moment it is committed.
+    public sealed class Wager
+    {
+        public float Opening { get; }
+        public float Extra { get; private set; }
+        public float Total => Opening + Extra;
+
+        public Wager(float opening) { Opening = opening; }
+
+        public bool Add(float amount, System.Func<float, bool> take)
+        {
+            if (amount <= 0f || !take(amount)) return false;
+            Extra += amount;
+            return true;
+        }
+    }
+
     public static class TableGames
     {
         private static readonly Dictionary<ETableGame, ITableGame> Registry =
             new Dictionary<ETableGame, ITableGame>
             {
                 [ETableGame.Baccarat] = new Games.BaccaratGame(),
+                [ETableGame.RedDog] = new Games.RedDogGame(),
             };
 
         public static ITableGame For(ETableGame id) =>

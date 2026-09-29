@@ -25,6 +25,9 @@ namespace CasinoExpansion.Casino
             public Text_ Selector;
             public Text_ Rules;
             public Text_ Players;
+            public Text_ Status;
+            public GameObject DecisionRow;
+            public readonly List<Text_> Decisions = new List<Text_>();
             public GameObject OptionList;
             public readonly List<Text_> Options = new List<Text_>();
             public Controller Controller;
@@ -129,8 +132,34 @@ namespace CasinoExpansion.Casino
             chrome.Players = CloneLabel(titleGo, chrome.Root.transform,
                 new Vector2(-(HalfW + 100f), 24f), new Vector2(180f, 156f), 15f);
 
+            // The round readout. Without this the game deals, resolves and pays entirely in the
+            // log: the table takes a stake and nothing visible happens, which reads as the mod
+            // silently eating money.
+            MakeBacking(readyGo, chrome.Root.transform, new Vector2(-(HalfW + 100f), -96f), new Vector2(196f, 72f));
+            chrome.Status = CloneLabel(titleGo, chrome.Root.transform,
+                new Vector2(-(HalfW + 100f), -96f), new Vector2(182f, 64f), 14f);
+
             chrome.Rules.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
             chrome.Players.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
+            chrome.Status.Label.alignment = Il2CppTMPro.TextAlignmentOptions.Top;
+
+            // Decision buttons sit where the eye already is -- directly under Ready, in the
+            // middle of the panel -- because they are time-limited and easy to miss out on a
+            // wing. Two are built and shown or hidden per prompt; no game in the line-up offers
+            // more than a pair of choices.
+            chrome.DecisionRow = new GameObject("Decisions");
+            chrome.DecisionRow.transform.SetParent(chrome.Root.transform, false);
+            for (int i = 0; i < 2; i++)
+            {
+                int index = i;
+                var btn = CloneButton(readyGo, chrome.DecisionRow.transform,
+                    new Vector2(-108f + i * 216f, -134f), new Vector2(200f, 40f));
+                btn.Label.fontSize = 16f;
+                btn.Button.onClick.AddListener((UnityAction)(() =>
+                    TableSession.For(chrome.Controller)?.Answer(index)));
+                chrome.Decisions.Add(btn);
+            }
+            chrome.DecisionRow.SetActive(false);
 
             chrome.OptionList = new GameObject("Options");
             chrome.OptionList.transform.SetParent(chrome.Root.transform, false);
@@ -248,6 +277,45 @@ namespace CasinoExpansion.Casino
                 chrome.Rules.Label.text = string.Join("\n", TableRules.For(game));
             if (chrome.Players?.Label != null)
                 chrome.Players.Label.text = BuildPlayerList(chrome);
+
+            var live = TableSession.For(chrome.Controller);
+
+            if (chrome.DecisionRow != null)
+            {
+                bool asking = live != null && live.Waiting;
+                chrome.DecisionRow.SetActive(asking);
+                if (asking)
+                    for (int i = 0; i < chrome.Decisions.Count; i++)
+                    {
+                        bool has = i < live.Options.Length;
+                        chrome.Decisions[i].Go.SetActive(has);
+                        if (has) chrome.Decisions[i].Label.text = live.Options[i];
+                    }
+            }
+
+            if (chrome.Status?.Label != null)
+            {
+                var session = live;
+                chrome.Status.Label.text =
+                    session != null && session.Waiting ? $"<b>{session.Prompt}</b>" :
+                    game == ETableGame.Vanilla ? "<size=80%>House rules — the table plays as normal.</size>"
+                    : !string.IsNullOrEmpty(session?.LastResult) ? session.LastResult
+                    : "<size=85%>Set your buy-in, then ready up.</size>";
+            }
+        }
+
+        // Ready state and the round readout both change without anything calling us, so the
+        // panel has to be pulled rather than pushed. Throttled: this runs every frame a table
+        // is open, and rebuilding the player list that often is pure waste.
+        private static float _nextTick;
+
+        public static void TickRefresh()
+        {
+            if (Time.unscaledTime < _nextTick) return;
+            _nextTick = Time.unscaledTime + 0.2f;
+
+            foreach (var chrome in Panels.Values)
+                if (chrome.Root != null && chrome.Root.activeSelf) Refresh(chrome);
         }
 
         // Solo, one readied player is enough; the vanilla panel's "waiting for other players"

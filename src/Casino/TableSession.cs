@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using MelonLoader;
 using UnityEngine;
@@ -22,6 +23,20 @@ namespace CasinoExpansion.Casino
 
         public string LastResult { get; private set; } = "";
         public float Stake { get; set; } = 10f;
+
+        // The table's own bet slider is the buy-in. Reading it rather than calling
+        // SetLocalPlayerBet keeps us out of a fight with the panel over the value -- vanilla
+        // rewrites it every frame from its own state, so anything we wrote would be stomped.
+        private float BuyIn(ITableGame game)
+        {
+            try
+            {
+                float bet = _controller.LocalPlayerBet;
+                if (bet > 0f) return bet;
+            }
+            catch { }
+            return Stake;
+        }
 
         private TableSession(Controller controller)
         {
@@ -112,7 +127,7 @@ namespace CasinoExpansion.Casino
             _dealing = true;
             _round++;
 
-            float stake = Mathf.Clamp(Stake, game.Limits.Min, game.Limits.Max);
+            float stake = Mathf.Clamp(BuyIn(game), game.Limits.Min, game.Limits.Max);
 
             if (!Bank.TryTakeBet(_gameId, _round, stake))
             {
@@ -126,34 +141,111 @@ namespace CasinoExpansion.Casino
             // Seed kept inside the float-exact range so it can be replicated verbatim: every
             // client rebuilds the identical deck rather than having cards sent to it.
             int seed = UnityEngine.Random.Range(1, RoundState.MaxExactInt);
+            var deck = new Deck(seed);
             var hands = new HandSet();
-            game.Deal(hands, new Deck(seed));
+            game.Deal(hands, deck);
 
-            LastResult = $"<b>{game.Title}</b>\nDealing...";
-            yield return new WaitForSeconds(0.8f);
+            LastResult = $"<b>{game.Title}</b>\n${stake:N0} staked\nDealing...";
 
-            // Reveal the hands before the verdict, so a round reads as a hand of cards rather
-            // than a number appearing out of nowhere.
-            var reveal = new System.Text.StringBuilder($"<b>{game.Title}</b>\n");
-            foreach (var hand in hands.Hands)
-                reveal.AppendLine($"{hand.Name}: {hand}");
-            LastResult = reveal.ToString();
-            yield return new WaitForSeconds(1.4f);
+            // Real cards on the felt where the table supports it. The text hands stay as the
+            // fallback rather than being deleted: they are the only readout at a table whose
+            // card rig we cannot drive, and they say what the cards mean as well as what they are.
+            if (TableCards.Supported(_controller))
+            {
+                TableCards.Clear(_controller);
+                yield return MelonCoroutines.Start(TableCards.DealOut(_controller, hands));
+            }
+            else
+            {
+                yield return new WaitForSeconds(0.8f);
+            }
 
-            var outcome = game.Resolve(hands, stake);
-            if (outcome.Multiplier > 0f) Bank.ApplyPayout(_gameId, _round, stake * outcome.Multiplier);
+            LastResult = Describe(game, hands);
 
-            float won = stake * outcome.Multiplier;
-            LastResult = outcome.Multiplier > 1f ? $"WON ${won:N0}\n{outcome.Summary}"
-                       : outcome.Multiplier > 0f ? $"Push\n{outcome.Summary}"
-                       : $"Lost ${stake:N0}\n{outcome.Summary}";
+            // The decision, for games that have one. Anything it draws is dealt onto the felt
+            // afterwards, so the player sees the card they committed to rather than finding it
+            // already there.
+            var wager = new Wager(stake);
+            if (game is IDecidingGame deciding)
+            {
+                var before = hands.Hands.Select(h => h.Cards.Count).ToArray();
 
-            MelonLogger.Msg($"[session] round {_round} seed {seed}: {outcome.Summary} -> x{outcome.Multiplier}");
+                yield return MelonCoroutines.Start(deciding.Decide(this, hands, deck, wager));
+
+                if (TableCards.Supported(_controller))
+                    yield return MelonCoroutines.Start(TableCards.DealOut(_controller, hands, 0.32f, before));
+
+                LastResult = Describe(game, hands);
+            }
+
+            yield return new WaitForSeconds(1.2f);
+
+            var outcome = game.Resolve(hands, wager.Total);
+            if (outcome.Multiplier > 0f) Bank.ApplyPayout(_gameId, _round, wager.Total * outcome.Multiplier);
+
+            float won = wager.Total * outcome.Multiplier;
+            LastResult = outcome.Multiplier > 1f ? $"<b>WON ${won - wager.Total:N0}</b>\n{outcome.Summary}"
+                       : outcome.Multiplier > 0f ? $"<b>Push</b>\n{outcome.Summary}"
+                       : $"<b>Lost ${wager.Total:N0}</b>\n{outcome.Summary}";
+
+            MelonLogger.Msg($"[session] round {_round} seed {seed} staked {wager.Total}: " +
+                            $"{outcome.Summary} -> x{outcome.Multiplier}");
 
             yield return new WaitForSeconds(1f);
             _dealing = false;
         }
 
+        private static string Describe(ITableGame game, HandSet hands)
+        {
+            var text = new System.Text.StringBuilder($"<b>{game.Title}</b>\n");
+            foreach (var hand in hands.Hands) text.AppendLine($"{hand.Name}: {hand}");
+            return text.ToString();
+        }
+
         public bool HasFreshResult => !string.IsNullOrEmpty(LastResult);
+
+        // ---- mid-round decisions -------------------------------------------------------
+        //
+        // The panel polls these rather than being pushed to, matching how the rest of the
+        // chrome refreshes. Only the local player answers: a decision changes this client's
+        // wager, never the cards, so the two clients still resolve identical hands.
+
+        public string Prompt { get; private set; }
+        public string[] Options { get; private set; }
+        private int _answer = -1;
+
+        public bool Waiting => Options != null;
+
+        public void Answer(int index)
+        {
+            if (Options != null && index >= 0 && index < Options.Length) _answer = index;
+        }
+
+        // Falls through to the last option if nobody answers. Standing is always the passive
+        // choice, so a player who walks away loses only what they had already staked.
+        public System.Collections.IEnumerator Ask(string prompt, string[] options, Action<int> chosen, float timeout = 25f)
+        {
+            Prompt = prompt;
+            Options = options;
+            _answer = -1;
+
+            float deadline = Time.unscaledTime + timeout;
+            while (_answer < 0 && Time.unscaledTime < deadline) yield return null;
+
+            int pick = _answer >= 0 ? _answer : options.Length - 1;
+            Prompt = null;
+            Options = null;
+
+            chosen?.Invoke(pick);
+        }
+
+        public void Announce(string text) => LastResult = text;
+
+        public System.Collections.IEnumerator Wait(float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+        }
+
+        public bool TakeRaise(float amount) => Bank.TryTakeRaise(_gameId, _round, amount);
     }
 }

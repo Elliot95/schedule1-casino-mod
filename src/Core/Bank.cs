@@ -38,6 +38,17 @@ namespace CasinoExpansion.Core
             return Apply($"{gameId}:{round}:bet", -amount, "bet");
         }
 
+        // A mid-round raise is a second, independent stake: Red Dog's raise, and later a
+        // blackjack double or split. It needs its own key or the idempotence guard would treat
+        // it as a duplicate of the opening bet and silently drop it.
+        public static bool TryTakeRaise(string gameId, int round, float amount)
+        {
+            if (amount <= 0f) return false;
+            if (!TryGetCashBalance(out var balance)) return false;
+            if (balance < amount) return false;
+            return Apply($"{gameId}:{round}:raise", -amount, "raise");
+        }
+
         public static void ApplyPayout(string gameId, int round, float amount)
         {
             if (amount <= 0f) return;
@@ -75,6 +86,7 @@ namespace CasinoExpansion.Core
         public static void ForgetRound(string gameId, int round)
         {
             Applied.Remove($"{gameId}:{round}:bet");
+            Applied.Remove($"{gameId}:{round}:raise");
             Applied.Remove($"{gameId}:{round}:payout");
             Applied.Remove($"{gameId}:{round}:refund");
         }
