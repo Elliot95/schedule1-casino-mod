@@ -18,13 +18,31 @@ Adds new games to Schedule I's casino. **Work in progress.**
 
 ## Install
 
-**Mod Manager:** install as normal.
+Copy `Mods/CasinoExpansion.dll` into the `Mods` folder **that your launcher actually reads** — these are not the same place.
 
-**Manual:** copy `Mods/CasinoExpansion.dll` into your game folder's `Mods` directory, e.g.
+**If you launch from Steam:**
 
 ```
 C:\Program Files (x86)\Steam\steamapps\common\Schedule I\Mods\
 ```
+
+**If you launch from Thunderstore Mod Manager / r2modman / Gale:** the manager keeps its own MelonLoader per profile and redirects the loader there, so the game folder above is never read. Use the profile instead:
+
+```
+%AppData%\Thunderstore Mod Manager\DataFolder\ScheduleI\profiles\<profile>\Mods\
+```
+
+Not sure which? Launch once and look near the top of `MelonLoader\Latest.log` for `Core::BasePath` — that is the folder the loader reads, and `Mods` sits inside it.
+
+**Check it worked.** The log should say, a couple of lines apart:
+
+```
+Melon Assembly loaded: '.\Mods\CasinoExpansion.dll'
+CasinoExpansion v0.2.0
+1 Mod loaded.
+```
+
+`0 Plugins loaded.` appears on every install and means nothing — plugins are a separate MelonLoader concept. The line to read is the **Mods** one.
 
 ## Keys
 
