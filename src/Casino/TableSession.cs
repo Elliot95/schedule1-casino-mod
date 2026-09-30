@@ -24,6 +24,16 @@ namespace CasinoExpansion.Casino
         public string LastResult { get; private set; } = "";
         public float Stake { get; set; } = 10f;
 
+        // Which side this player is backing. Local to each client on purpose: the cards are
+        // shared but the wager is not, so two players at one table can back opposite sides.
+        public int Side { get; private set; }
+
+        public void CycleSide(int count)
+        {
+            if (count <= 0) { Side = 0; return; }
+            Side = (Side + 1) % count;
+        }
+
         // The table's own bet slider is the buy-in. Reading it rather than calling
         // SetLocalPlayerBet keeps us out of a fight with the panel over the value -- vanilla
         // rewrites it every frame from its own state, so anything we wrote would be stomped.
@@ -180,7 +190,7 @@ namespace CasinoExpansion.Casino
 
             yield return new WaitForSeconds(1.2f);
 
-            var outcome = game.Resolve(hands, wager.Total);
+            var outcome = game.Resolve(hands, wager.Total, Side);
             if (outcome.Multiplier > 0f) Bank.ApplyPayout(_gameId, _round, wager.Total * outcome.Multiplier);
 
             float won = wager.Total * outcome.Multiplier;

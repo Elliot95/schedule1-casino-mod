@@ -4,9 +4,10 @@ using CasinoExpansion.Core;
 
 namespace CasinoExpansion.Games
 {
-    // Punto banco: no decisions, the draw is entirely dictated by the rules, which is why it is
-    // the right first game -- it exercises the whole round loop while the rules themselves are
-    // almost trivial.
+    // Punto banco. No decisions once the cards are out -- every draw is dictated by the rules,
+    // which is why it was the right first game: it exercises the whole round loop while the
+    // rules themselves stay small. The one choice is made before the deal, in picking which of
+    // the three sides to back.
     public sealed class BaccaratGame : ITableGame
     {
         public const string PlayerHand = "Player";

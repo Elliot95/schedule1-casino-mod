@@ -26,6 +26,7 @@ namespace CasinoExpansion.Casino
             public Text_ Rules;
             public Text_ Players;
             public Text_ Status;
+            public Text_ Side;
             public GameObject DecisionRow;
             public readonly List<Text_> Decisions = new List<Text_>();
             public GameObject OptionList;
@@ -142,6 +143,20 @@ namespace CasinoExpansion.Casino
             chrome.Rules.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
             chrome.Players.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
             chrome.Status.Label.alignment = Il2CppTMPro.TextAlignmentOptions.Top;
+
+            // Directly beneath the game selector, because it is the same kind of choice: made
+            // before the deal and then left alone. Cycles on click rather than opening a list --
+            // two or three sides do not earn a dropdown.
+            chrome.Side = CloneButton(readyGo, chrome.Root.transform,
+                new Vector2(150f, -38f), new Vector2(160f, 34f));
+            chrome.Side.Label.fontSize = 14f;
+            chrome.Side.Button.onClick.AddListener((UnityAction)(() =>
+            {
+                var game = TableGames.For(TableModes.Get(chrome.Controller));
+                if (game == null || game.Sides.Length == 0) return;
+                TableSession.For(chrome.Controller)?.CycleSide(game.Sides.Length);
+                Refresh(chrome);
+            }));
 
             // Decision buttons sit where the eye already is -- directly under Ready, in the
             // middle of the panel -- because they are time-limited and easy to miss out on a
@@ -279,6 +294,20 @@ namespace CasinoExpansion.Casino
                 chrome.Players.Label.text = BuildPlayerList(chrome);
 
             var live = TableSession.For(chrome.Controller);
+
+            if (chrome.Side != null)
+            {
+                var def = TableGames.For(game);
+                var sides = def?.Sides ?? System.Array.Empty<string>();
+                bool offered = sides.Length > 0;
+
+                chrome.Side.Go.SetActive(offered);
+                if (offered && live != null)
+                {
+                    int i = Mathf.Clamp(live.Side, 0, sides.Length - 1);
+                    chrome.Side.Label.text = $"Bet: {sides[i]}";
+                }
+            }
 
             if (chrome.DecisionRow != null)
             {

@@ -25,10 +25,13 @@ namespace CasinoExpansion.Casino
             ETableGame.Baccarat => new[]
             {
                 "<b>Baccarat</b>",
-                "Bet Player or Banker.",
                 "Closest to 9 wins.",
                 "Tens and faces count zero.",
                 "Totals drop the tens digit.",
+                "Player pays 1 to 1.",
+                "Banker pays 1 to 1, less 5%.",
+                "Tie pays 8 to 1.",
+                "Draws follow fixed rules.",
             },
             ETableGame.CasinoHoldem => new[]
             {
