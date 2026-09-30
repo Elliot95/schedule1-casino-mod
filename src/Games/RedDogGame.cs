@@ -22,6 +22,9 @@ namespace CasinoExpansion.Games
         public string Title => "Red Dog";
         public BetRange Limits => new BetRange(10f, 50_000f);
 
+        // One wager only: the decision here is the raise, not which side to back.
+        public string[] Sides => System.Array.Empty<string>();
+
         private const string PlayerHand = "Table";
 
         // Ace is always high here, unlike baccarat. Ranks run 2..14 so a spread is plain
@@ -68,7 +71,7 @@ namespace CasinoExpansion.Games
             hand.Add(deck.Draw());
         }
 
-        public Outcome Resolve(HandSet hands, float stake)
+        public Outcome Resolve(HandSet hands, float stake, int side)
         {
             var cards = hands[PlayerHand].Cards;
             int a = Rank(cards[0]), b = Rank(cards[1]);

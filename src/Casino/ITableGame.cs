@@ -52,13 +52,19 @@ namespace CasinoExpansion.Casino
         string Title { get; }
         BetRange Limits { get; }
 
+        // What the player can back, chosen before the deal. Empty for a game with a single
+        // wager. The side is per-player and never needs consensus: everyone sees the same
+        // cards, and each client pays only its own wager, so two players at one table can
+        // back opposite sides and both be right.
+        string[] Sides { get; }
+
         // Deals into the set. Runs on the authority only; every client reconstructs the same
         // cards from the same seed rather than having them replicated.
         void Deal(HandSet hands, Deck deck);
 
         // PURE. Same hands and stake must give the same result on every client, because
         // ChangeCashBalance is local and any disagreement silently mints or destroys money.
-        Outcome Resolve(HandSet hands, float stake);
+        Outcome Resolve(HandSet hands, float stake, int side);
     }
 
     // Implemented alongside ITableGame by any game with a decision in the middle of the round --
