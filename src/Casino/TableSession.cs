@@ -26,13 +26,7 @@ namespace CasinoExpansion.Casino
 
         // Which side this player is backing. Local to each client on purpose: the cards are
         // shared but the wager is not, so two players at one table can back opposite sides.
-        public int Side { get; private set; }
-
-        public void CycleSide(int count)
-        {
-            if (count <= 0) { Side = 0; return; }
-            Side = (Side + 1) % count;
-        }
+        public int Side { get; set; }
 
         // The table's own bet slider is the buy-in. Reading it rather than calling
         // SetLocalPlayerBet keeps us out of a fight with the panel over the value -- vanilla
@@ -153,6 +147,15 @@ namespace CasinoExpansion.Casino
                 yield break;
             }
 
+            // Which side to back, asked after the money is down and before any card is seen --
+            // which is when a real table takes it. It used to be a toggle on the bet panel,
+            // made before betting, which is the wrong way round.
+            if (game.Sides.Length > 0)
+            {
+                yield return MelonCoroutines.Start(Ask(
+                    $"${stake:N0} on which side?", game.Sides, i => Side = i, 20f, 0));
+            }
+
             // Seed kept inside the float-exact range so it can be replicated verbatim: every
             // client rebuilds the identical deck rather than having cards sent to it.
             int seed = UnityEngine.Random.Range(1, RoundState.MaxExactInt);
@@ -203,6 +206,16 @@ namespace CasinoExpansion.Casino
             // hand will deal.
             TableInterface.Finish();
             if (TableCards.Supported(_controller)) TableCards.EndRound(_controller);
+
+            // Vanilla leaves the ready flag set after a hand. Clearing it is what turns the
+            // button back into Ready, so the next round is one press rather than cancel,
+            // ready, and wonder why nothing dealt.
+            if (AllReady())
+            {
+                try { _controller.ToggleLocalPlayerReady(); }
+                catch (Exception e) { MelonLogger.Warning($"[session] could not clear ready: {e.Message}"); }
+            }
+            _dealtThisReady = false;
 
             _dealing = false;
         }

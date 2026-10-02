@@ -26,7 +26,8 @@ namespace CasinoExpansion.Casino
             public Text_ Rules;
             public Text_ Players;
             public Text_ Status;
-            public Text_ Side;
+            public Text_ Minus;
+            public Text_ Plus;
             public GameObject DecisionRow;
             public readonly List<Text_> Decisions = new List<Text_>();
             public GameObject OptionList;
@@ -149,19 +150,19 @@ namespace CasinoExpansion.Casino
             chrome.Players.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
             chrome.Status.Label.alignment = Il2CppTMPro.TextAlignmentOptions.Center;
 
-            // Directly beneath the game selector, because it is the same kind of choice: made
-            // before the deal and then left alone. Cycles on click rather than opening a list --
-            // two or three sides do not earn a dropdown.
-            chrome.Side = CloneButton(readyGo, chrome.Root.transform,
-                new Vector2(150f, -38f), new Vector2(160f, 34f));
-            chrome.Side.Label.fontSize = 14f;
-            chrome.Side.Button.onClick.AddListener((UnityAction)(() =>
-            {
-                var game = TableGames.For(TableModes.Get(chrome.Controller));
-                if (game == null || game.Sides.Length == 0) return;
-                TableSession.For(chrome.Controller)?.CycleSide(game.Sides.Length);
-                Refresh(chrome);
-            }));
+            // Stake nudges. The slider spans $10 to $50,000, so a single pixel is worth about
+            // $150 -- fine for picking a ballpark, useless for landing on a round number.
+            chrome.Minus = CloneButton(readyGo, chrome.Root.transform,
+                new Vector2(-150f, -38f), new Vector2(72f, 34f));
+            chrome.Minus.Label.text = "- $1,000";
+            chrome.Minus.Label.fontSize = 13f;
+            chrome.Minus.Button.onClick.AddListener((UnityAction)(() => Nudge(chrome, -1000f)));
+
+            chrome.Plus = CloneButton(readyGo, chrome.Root.transform,
+                new Vector2(150f, -38f), new Vector2(72f, 34f));
+            chrome.Plus.Label.text = "+ $1,000";
+            chrome.Plus.Label.fontSize = 13f;
+            chrome.Plus.Button.onClick.AddListener((UnityAction)(() => Nudge(chrome, 1000f)));
 
             // Decision buttons sit where the eye already is -- directly under Ready, in the
             // middle of the panel -- because they are time-limited and easy to miss out on a
@@ -305,20 +306,6 @@ namespace CasinoExpansion.Casino
             var live = TableSession.For(chrome.Controller);
             ReadStake(chrome, live);
 
-            if (chrome.Side != null)
-            {
-                var def = TableGames.For(game);
-                var sides = def?.Sides ?? System.Array.Empty<string>();
-                bool offered = sides.Length > 0;
-
-                chrome.Side.Go.SetActive(offered);
-                if (offered && live != null)
-                {
-                    int i = Mathf.Clamp(live.Side, 0, sides.Length - 1);
-                    chrome.Side.Label.text = $"Bet: {sides[i]}";
-                }
-            }
-
             if (chrome.DecisionRow != null)
             {
                 bool asking = live != null && live.Waiting;
@@ -364,6 +351,23 @@ namespace CasinoExpansion.Casino
             // or the panel reads $1,000 under a slider sitting at $50,000.
             if (chrome.Panel._betAmount != null)
                 chrome.Panel._betAmount.text = $"${session.Stake:N0}";
+        }
+
+        private static void Nudge(Chrome chrome, float delta)
+        {
+            var def = TableGames.For(TableModes.Get(chrome.Controller));
+            var session = TableSession.For(chrome.Controller);
+            var slider = chrome.Panel?._betSlider;
+            if (def == null || session == null || slider == null) return;
+
+            float target = Mathf.Clamp(session.Stake + delta, def.Limits.Min, def.Limits.Max);
+            float span = def.Limits.Max - def.Limits.Min;
+            float t = Mathf.Approximately(span, 0f) ? 0f : (target - def.Limits.Min) / span;
+
+            // Written to the slider rather than to Stake: ReadStake rebuilds Stake from the
+            // slider five times a second, so anything set directly would vanish.
+            slider.value = Mathf.Lerp(slider.minValue, slider.maxValue, t);
+            Refresh(chrome);
         }
 
         private const int MaxDecisions = 4;
