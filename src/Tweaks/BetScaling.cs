@@ -44,11 +44,38 @@ namespace CasinoExpansion.Tweaks
                     // slider position rather than $37,412.
                     float raw = game.Limits.Min + t * span;
                     __result = Mathf.Round(raw / 10f) * 10f;
+
+                    // Kept here as well, because rescaling the slider is not sufficient on its
+                    // own: SetLocalPlayerBet clamps the value back to the vanilla table maximum
+                    // before it ever reaches LocalPlayerBet, so reading that gives $1,000 no
+                    // matter what the slider says. The session's own figure is the stake that
+                    // actually gets banked.
+                    TableSession.For(controller).Stake = __result;
                 }
                 catch (Exception e)
                 {
                     MelonLogger.Warning($"[bets] could not rescale the slider: {e.Message}");
                 }
+            }
+        }
+
+        // The readout is written from LocalPlayerBet, which is clamped, so it would show
+        // $1,000 under a slider sitting at $50,000. Rewritten after vanilla has had its say.
+        [HarmonyPatch(typeof(BetPanel), nameof(BetPanel.RefreshDisplayedBet))]
+        internal static class DisplayPatch
+        {
+            private static void Postfix(BetPanel __instance)
+            {
+                try
+                {
+                    var controller = __instance?._gameController;
+                    if (controller == null || __instance._betAmount == null) return;
+                    if (TableGames.For(TableModes.Get(controller)) == null) return;
+
+                    float stake = TableSession.For(controller).Stake;
+                    __instance._betAmount.text = $"${stake:N0}";
+                }
+                catch { }
             }
         }
 

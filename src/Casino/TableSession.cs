@@ -39,13 +39,18 @@ namespace CasinoExpansion.Casino
         // rewrites it every frame from its own state, so anything we wrote would be stomped.
         private float BuyIn(ITableGame game)
         {
+            // Stake is written by the slider patch and is the only figure that survives
+            // vanilla's clamp to the old $1,000 table maximum. LocalPlayerBet is the fallback
+            // for a table whose slider we never saw move.
+            if (Stake > 0f) return Stake;
+
             try
             {
                 float bet = _controller.LocalPlayerBet;
                 if (bet > 0f) return bet;
             }
             catch { }
-            return Stake;
+            return 10f;
         }
 
         private TableSession(Controller controller)
@@ -196,6 +201,7 @@ namespace CasinoExpansion.Casino
             // Give the table back. The controller still thinks a round is running otherwise,
             // which leaves the ready flag set and forces a cancel-and-ready-up before the next
             // hand will deal.
+            TableInterface.Finish();
             if (TableCards.Supported(_controller)) TableCards.EndRound(_controller);
 
             _dealing = false;
@@ -227,25 +233,39 @@ namespace CasinoExpansion.Casino
             if (Options != null && index >= 0 && index < Options.Length) _answer = index;
         }
 
-        // Falls through to the last option if nobody answers. Standing is always the passive
-        // choice, so a player who walks away loses only what they had already staked.
-        public System.Collections.IEnumerator Ask(string prompt, string[] options, Action<int> chosen, float timeout = 25f)
+        // An unanswered prompt falls through to `fallback`, which defaults to option 1 -- the
+        // passive choice in every game here: Stand, Fold, Cash out. It used to fall through to
+        // the LAST option, which in blackjack is Double or Split, so a prompt nobody could see
+        // answered itself by raising the stake and hitting again.
+        public System.Collections.IEnumerator Ask(string prompt, string[] options, Action<int> chosen,
+                                                  float timeout = 25f, int fallback = 1)
         {
             Prompt = prompt;
             Options = options;
             _answer = -1;
 
+            // Shown on the table's own input panel where one exists, because the bet panel --
+            // where the rest of the chrome lives -- is closed while a hand is in play.
+            TableInterface.Active = this;
+            bool onTable = TableInterface.Prompt(_controller, options);
+
             float deadline = Time.unscaledTime + timeout;
             while (_answer < 0 && Time.unscaledTime < deadline) yield return null;
 
-            int pick = _answer >= 0 ? _answer : options.Length - 1;
+            int pick = _answer >= 0 ? _answer : Mathf.Clamp(fallback, 0, options.Length - 1);
             Prompt = null;
             Options = null;
+
+            if (onTable) TableInterface.Done(_controller);
 
             chosen?.Invoke(pick);
         }
 
         public void Announce(string text) => LastResult = text;
+
+        // The Dealer/You readout on the table's own interface. Games set it because only they
+        // know what a score means -- 21 in blackjack, nine in baccarat, a spread in Red Dog.
+        public void Scores(string dealer, string player) => TableInterface.Scores(dealer, player);
 
         // Deals whatever is in the hands but not yet on the felt. Games call this after adding
         // cards mid-round -- a blackjack hit has to land before the next prompt, not after the

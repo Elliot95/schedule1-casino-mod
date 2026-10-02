@@ -87,6 +87,10 @@ namespace CasinoExpansion.Games
                         if (CanSplit(hand)) options.Add("Split");
                     }
 
+                    // The table's own Dealer/You readout, so the numbers appear where a
+                    // blackjack player already looks for them.
+                    session.Scores($"{Total(new List<Card> { dealer.Cards[0] })}+?", total.ToString());
+
                     int choice = 1;
                     yield return session.Ask(
                         $"{where}you have {total} — dealer shows {Face(dealer.Cards[0])}",
@@ -154,6 +158,7 @@ namespace CasinoExpansion.Games
             while (Total(dealer.Cards) < 17)
             {
                 dealer.Add(deck.Draw());
+                session.Scores(Total(dealer.Cards).ToString(), Total(hands[PlayerHand].Cards).ToString());
                 yield return session.Show(hands);
             }
         }
