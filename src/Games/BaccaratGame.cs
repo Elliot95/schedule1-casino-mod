@@ -16,6 +16,7 @@ namespace CasinoExpansion.Games
         public ETableGame Id => ETableGame.Baccarat;
         public string Title => "Baccarat";
         public BetRange Limits => new BetRange(10f, 50000f);
+        public int Decks => 8;
         public string[] Sides => new[] { PlayerHand, BankerHand, "Tie" };
 
         // Totals count modulo 10: tens and faces are worth nothing, aces one.

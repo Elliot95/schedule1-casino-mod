@@ -25,6 +25,7 @@ namespace CasinoExpansion.Games
         public ETableGame Id => ETableGame.PaiGow;
         public string Title => "Pai Gow Poker";
         public BetRange Limits => new BetRange(10f, 50_000f);
+        public int Decks => 1;
         public string[] Sides => System.Array.Empty<string>();
 
         public void Deal(HandSet hands, Deck deck)

@@ -24,6 +24,7 @@ namespace CasinoExpansion.Games
         public ETableGame Id => ETableGame.CasinoHoldem;
         public string Title => "Casino Hold'em";
         public BetRange Limits => new BetRange(10f, 50_000f);
+        public int Decks => 1;
         public string[] Sides => System.Array.Empty<string>();
 
         public void Deal(HandSet hands, Deck deck)

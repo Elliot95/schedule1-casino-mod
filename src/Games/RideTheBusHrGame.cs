@@ -23,6 +23,7 @@ namespace CasinoExpansion.Games
         public ETableGame Id => ETableGame.RideTheBusHR;
         public string Title => "Ride the Bus (high roller)";
         public BetRange Limits => new BetRange(10f, 50_000f);
+        public int Decks => 1;
         public string[] Sides => System.Array.Empty<string>();
 
         // Multipliers for each stage, applied cumulatively. Four correct guesses returns

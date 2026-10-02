@@ -13,7 +13,7 @@ namespace CasinoExpansion.Casino
                 "Dealer draws to 16, stands on 17.",
                 "Blackjack pays 3 to 2.",
                 "Double on your first two cards.",
-                "No splitting.",
+                "Split pairs as often as they come.",
                 "Stakes up to $50,000.",
             },
             ETableGame.RideTheBusHR => new[]

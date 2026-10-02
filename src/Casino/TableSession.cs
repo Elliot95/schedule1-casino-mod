@@ -151,7 +151,7 @@ namespace CasinoExpansion.Casino
             // Seed kept inside the float-exact range so it can be replicated verbatim: every
             // client rebuilds the identical deck rather than having cards sent to it.
             int seed = UnityEngine.Random.Range(1, RoundState.MaxExactInt);
-            var deck = new Deck(seed);
+            var deck = new Deck(seed, game.Decks);
             var hands = new HandSet();
             game.Deal(hands, deck);
 

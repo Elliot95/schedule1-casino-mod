@@ -62,6 +62,11 @@ namespace CasinoExpansion.Casino
         string Title { get; }
         BetRange Limits { get; }
 
+        // How many 52-card decks are shuffled together for a round. Matches the table the
+        // game is modelled on, and keeps a heavy-splitting blackjack hand from running the
+        // shoe dry. Rebuilt every round, so there is nothing to count.
+        int Decks { get; }
+
         // What the player can back, chosen before the deal. Empty for a game with a single
         // wager. The side is per-player and never needs consensus: everyone sees the same
         // cards, and each client pays only its own wager, so two players at one table can

@@ -90,8 +90,35 @@ namespace CasinoExpansion.Casino
 
                 bj.RpcLogic___SetRoundEnded_1140765316(false);
                 bj.CurrentStage = Bj.EStage.Dealing;
+
+                LogVanillaDeck(bj);
             }
             catch (Exception e) { MelonLogger.Warning($"[cards] could not open the round: {e.Message}"); }
+        }
+
+        // How vanilla's own deck works has never actually been established -- the fields are
+        // visible but their behaviour is not, and guessing at it is how a card game quietly
+        // deals the same card twice. Logged once per session, the first time a table opens a
+        // round: how many card values are in the deck, how many have been drawn, and how many
+        // physical card objects the table owns.
+        private static bool _loggedDeck;
+
+        private static void LogVanillaDeck(Bj bj)
+        {
+            if (_loggedDeck) return;
+            _loggedDeck = true;
+
+            try
+            {
+                int inDeck = bj.cardValuesInDeck?.Count ?? -1;
+                int drawn = bj.drawnCardsValues?.Count ?? -1;
+                int objects = bj.Cards?.Length ?? -1;
+
+                MelonLogger.Msg($"[deck] vanilla: {inDeck} values in deck, {drawn} already drawn, " +
+                                $"{objects} card objects on the table. " +
+                                $"{(inDeck == 52 ? "One deck." : inDeck % 52 == 0 ? $"{inDeck / 52} decks." : "Not a whole number of decks -- it is not reset per round.")}");
+            }
+            catch (Exception e) { MelonLogger.Warning($"[deck] could not read the vanilla deck: {e.Message}"); }
         }
 
         // Hands the table back to vanilla. Without this the round never ends as far as the

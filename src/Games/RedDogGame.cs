@@ -23,6 +23,7 @@ namespace CasinoExpansion.Games
         public BetRange Limits => new BetRange(10f, 50_000f);
 
         // One wager only: the decision here is the raise, not which side to back.
+        public int Decks => 1;
         public string[] Sides => System.Array.Empty<string>();
 
         private const string PlayerHand = "Table";
