@@ -136,13 +136,16 @@ namespace CasinoExpansion.Casino
             // The round readout. Without this the game deals, resolves and pays entirely in the
             // log: the table takes a stake and nothing visible happens, which reads as the mod
             // silently eating money.
-            MakeBacking(readyGo, chrome.Root.transform, new Vector2(-(HalfW + 100f), -96f), new Vector2(196f, 72f));
+            // Full width across the bottom, under the decision buttons. It was on the left
+            // wing, which put the one line that changes every second furthest from where the
+            // player is looking -- at the cards and at the buttons they are about to press.
+            MakeBacking(readyGo, chrome.Root.transform, new Vector2(0f, -192f), new Vector2(520f, 62f));
             chrome.Status = CloneLabel(titleGo, chrome.Root.transform,
-                new Vector2(-(HalfW + 100f), -96f), new Vector2(182f, 64f), 14f);
+                new Vector2(0f, -192f), new Vector2(504f, 54f), 15f);
 
             chrome.Rules.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
             chrome.Players.Label.alignment = Il2CppTMPro.TextAlignmentOptions.TopLeft;
-            chrome.Status.Label.alignment = Il2CppTMPro.TextAlignmentOptions.Top;
+            chrome.Status.Label.alignment = Il2CppTMPro.TextAlignmentOptions.Center;
 
             // Directly beneath the game selector, because it is the same kind of choice: made
             // before the deal and then left alone. Cycles on click rather than opening a list --

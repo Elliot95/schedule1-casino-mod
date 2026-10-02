@@ -61,12 +61,67 @@ namespace CasinoExpansion.Casino
             catch (Exception e) { MelonLogger.Warning($"[cards] reset failed: {e.Message}"); }
         }
 
-        // The seat the local player is sitting in. Card positions are indexed by seat, so a
-        // hand dealt to the wrong index lands on someone else's felt.
+        // Puts the table into a real round before any card is dealt.
+        //
+        // This is what was missing while cards piled up on the deck: GetPlayerCardPositions
+        // indexes playersInCurrentRound, and that list is filled by StartGame -- which we
+        // suppress, because it would deal the vanilla game. So the table had seats, a deck and
+        // card objects, but no player in the round and therefore nowhere to send a card.
+        //
+        // Every seated player is added on every client. The call is the RpcLogic body, so each
+        // client builds the same round locally rather than relying on an RPC that an unowned
+        // client cannot send.
+        public static void BeginRound(Controller c)
+        {
+            var bj = c?.TryCast<Bj>();
+            if (bj == null) return;
+
+            try
+            {
+                var players = c.Players;
+                if (players == null) return;
+
+                for (int i = 0; i < players.CurrentPlayerCount; i++)
+                {
+                    var p = players.GetPlayer(i);
+                    if (p?.NetworkObject == null) continue;
+                    bj.RpcLogic___AddPlayerToCurrentRound_3323014238(p.NetworkObject);
+                }
+
+                bj.RpcLogic___SetRoundEnded_1140765316(false);
+                bj.CurrentStage = Bj.EStage.Dealing;
+            }
+            catch (Exception e) { MelonLogger.Warning($"[cards] could not open the round: {e.Message}"); }
+        }
+
+        // Hands the table back to vanilla. Without this the round never ends as far as the
+        // controller is concerned, the ready flag stays set, and the player has to cancel and
+        // ready up again before anything will deal.
+        public static void EndRound(Controller c)
+        {
+            var bj = c?.TryCast<Bj>();
+            if (bj == null) return;
+
+            try
+            {
+                bj.CurrentStage = Bj.EStage.Ending;
+                bj.RpcLogic___EndGame_2166136261();
+            }
+            catch (Exception e) { MelonLogger.Warning($"[cards] could not close the round: {e.Message}"); }
+        }
+
+        // The local player's index WITHIN THE CURRENT ROUND, which is what card positions are
+        // keyed by -- not the seat index, which can differ once someone sits out.
         public static int LocalSeat(Controller c)
         {
             try
             {
+                var bj = c?.TryCast<Bj>();
+                var round = bj?.playersInCurrentRound;
+                if (round != null)
+                    for (int i = 0; i < round.Count; i++)
+                        if (round[i] != null && round[i].IsLocalPlayer) return i;
+
                 var players = c.Players;
                 if (players == null) return 0;
                 for (int i = 0; i < players.CurrentPlayerCount; i++)

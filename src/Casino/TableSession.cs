@@ -158,7 +158,11 @@ namespace CasinoExpansion.Casino
             LastResult = $"<b>{game.Title}</b>\n${stake:N0} staked\nDealing...";
 
             _placed = null;
-            if (TableCards.Supported(_controller)) TableCards.Clear(_controller);
+            if (TableCards.Supported(_controller))
+            {
+                TableCards.Clear(_controller);
+                TableCards.BeginRound(_controller);
+            }
 
             yield return MelonCoroutines.Start(Show(hands));
             LastResult = Describe(game, hands);
@@ -188,6 +192,12 @@ namespace CasinoExpansion.Casino
                             $"{outcome.Summary} -> x{outcome.Multiplier}");
 
             yield return new WaitForSeconds(1f);
+
+            // Give the table back. The controller still thinks a round is running otherwise,
+            // which leaves the ready flag set and forces a cancel-and-ready-up before the next
+            // hand will deal.
+            if (TableCards.Supported(_controller)) TableCards.EndRound(_controller);
+
             _dealing = false;
         }
 
