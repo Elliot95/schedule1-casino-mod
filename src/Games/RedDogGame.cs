@@ -71,7 +71,7 @@ namespace CasinoExpansion.Games
             hand.Add(deck.Draw());
         }
 
-        public Outcome Resolve(HandSet hands, float stake, int side)
+        public Outcome Resolve(HandSet hands, Wager wager, int side)
         {
             var cards = hands[PlayerHand].Cards;
             int a = Rank(cards[0]), b = Rank(cards[1]);

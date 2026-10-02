@@ -11,15 +11,18 @@ namespace CasinoExpansion.Casino
                 "<b>Blackjack (High Roller)</b>",
                 "Beat the dealer without passing 21.",
                 "Dealer draws to 16, stands on 17.",
-                "Blackjack pays 3:2.",
+                "Blackjack pays 3 to 2.",
+                "Double on your first two cards.",
+                "No splitting.",
                 "Stakes up to $50,000.",
             },
             ETableGame.RideTheBusHR => new[]
             {
                 "<b>Ride the Bus (High Roller)</b>",
-                "Four questions, each harder.",
-                "Win to ride on, cash out any time.",
-                "Lose one and the round is over.",
+                "Four guesses, each harder.",
+                "2x, 2x, 3x, 4x -- 48x for all four.",
+                "Cash out after any correct guess.",
+                "One wrong guess takes the lot.",
                 "Stakes up to $50,000.",
             },
             ETableGame.Baccarat => new[]
@@ -37,9 +40,10 @@ namespace CasinoExpansion.Casino
             {
                 "<b>Casino Hold'em</b>",
                 "Ante, then see the flop.",
-                "Call to continue or fold to quit.",
-                "Best five cards beat the dealer.",
-                "Dealer needs a pair to qualify.",
+                "Call for twice the ante, or fold.",
+                "Best five of seven wins.",
+                "Dealer needs a pair of fours.",
+                "Ante pays more for big hands.",
             },
             ETableGame.ThreeCardPoker => new[]
             {
@@ -54,7 +58,8 @@ namespace CasinoExpansion.Casino
                 "<b>Pai Gow Poker</b>",
                 "Seven cards, split into five and two.",
                 "The five must outrank the two.",
-                "Win both hands to win.",
+                "Both hands set the house way.",
+                "Win both to win, less 5%.",
                 "One each is a push.",
             },
             ETableGame.RedDog => new[]

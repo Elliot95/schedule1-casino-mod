@@ -76,7 +76,7 @@ namespace CasinoExpansion.Games
         // it wins about 51% of decided hands, so without the commission the player edge would
         // be positive. Tie pays 8 to 1 and is the worst bet on the table by a distance; it is
         // offered because leaving it out would be the odd omission, not because it is wise.
-        public Outcome Resolve(HandSet hands, float stake, int side)
+        public Outcome Resolve(HandSet hands, Wager wager, int side)
         {
             var player = hands[PlayerHand];
             var banker = hands[BankerHand];

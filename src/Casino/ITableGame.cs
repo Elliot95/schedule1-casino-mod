@@ -25,6 +25,16 @@ namespace CasinoExpansion.Casino
     {
         public readonly List<Hand> Hands = new List<Hand>();
 
+        // Anything a decision established that the cards alone do not record -- which stage a
+        // Ride the Bus player reached, what they guessed. It belongs here rather than on the
+        // game because games are shared singletons: a field on one would be overwritten by a
+        // second table mid-round, and it would break Resolve's purity, which is the guard
+        // against two clients paying different amounts.
+        public readonly Dictionary<string, float> Notes = new Dictionary<string, float>();
+
+        public float Note(string key, float fallback = 0f) =>
+            Notes.TryGetValue(key, out var v) ? v : fallback;
+
         public Hand Add(string name)
         {
             var hand = new Hand(name);
@@ -62,9 +72,11 @@ namespace CasinoExpansion.Casino
         // cards from the same seed rather than having them replicated.
         void Deal(HandSet hands, Deck deck);
 
-        // PURE. Same hands and stake must give the same result on every client, because
+        // PURE. Same hands and wager must give the same result on every client, because
         // ChangeCashBalance is local and any disagreement silently mints or destroys money.
-        Outcome Resolve(HandSet hands, float stake, int side);
+        // The wager is passed whole rather than as a total so a game can tell a fold from a
+        // play: Extra is zero when no mid-round bet was taken.
+        Outcome Resolve(HandSet hands, Wager wager, int side);
     }
 
     // Implemented alongside ITableGame by any game with a decision in the middle of the round --
@@ -102,7 +114,12 @@ namespace CasinoExpansion.Casino
         private static readonly Dictionary<ETableGame, ITableGame> Registry =
             new Dictionary<ETableGame, ITableGame>
             {
+                [ETableGame.BlackjackHR] = new Games.BlackjackHrGame(),
+                [ETableGame.RideTheBusHR] = new Games.RideTheBusHrGame(),
                 [ETableGame.Baccarat] = new Games.BaccaratGame(),
+                [ETableGame.CasinoHoldem] = new Games.CasinoHoldemGame(),
+                [ETableGame.ThreeCardPoker] = new Games.ThreeCardPokerGame(),
+                [ETableGame.PaiGow] = new Games.PaiGowGame(),
                 [ETableGame.RedDog] = new Games.RedDogGame(),
             };
 

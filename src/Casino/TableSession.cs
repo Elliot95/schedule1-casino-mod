@@ -157,40 +157,26 @@ namespace CasinoExpansion.Casino
 
             LastResult = $"<b>{game.Title}</b>\n${stake:N0} staked\nDealing...";
 
-            // Real cards on the felt where the table supports it. The text hands stay as the
-            // fallback rather than being deleted: they are the only readout at a table whose
-            // card rig we cannot drive, and they say what the cards mean as well as what they are.
-            if (TableCards.Supported(_controller))
-            {
-                TableCards.Clear(_controller);
-                yield return MelonCoroutines.Start(TableCards.DealOut(_controller, hands));
-            }
-            else
-            {
-                yield return new WaitForSeconds(0.8f);
-            }
+            _placed = null;
+            if (TableCards.Supported(_controller)) TableCards.Clear(_controller);
 
+            yield return MelonCoroutines.Start(Show(hands));
             LastResult = Describe(game, hands);
 
-            // The decision, for games that have one. Anything it draws is dealt onto the felt
-            // afterwards, so the player sees the card they committed to rather than finding it
-            // already there.
+            // The decision, for games that have one. A game that draws mid-decision calls Show
+            // itself so the card lands as it is committed to; anything still unplaced when
+            // Decide returns is dealt here.
             var wager = new Wager(stake);
             if (game is IDecidingGame deciding)
             {
-                var before = hands.Hands.Select(h => h.Cards.Count).ToArray();
-
                 yield return MelonCoroutines.Start(deciding.Decide(this, hands, deck, wager));
-
-                if (TableCards.Supported(_controller))
-                    yield return MelonCoroutines.Start(TableCards.DealOut(_controller, hands, 0.32f, before));
-
+                yield return MelonCoroutines.Start(Show(hands));
                 LastResult = Describe(game, hands);
             }
 
             yield return new WaitForSeconds(1.2f);
 
-            var outcome = game.Resolve(hands, wager.Total, Side);
+            var outcome = game.Resolve(hands, wager, Side);
             if (outcome.Multiplier > 0f) Bank.ApplyPayout(_gameId, _round, wager.Total * outcome.Multiplier);
 
             float won = wager.Total * outcome.Multiplier;
@@ -250,6 +236,28 @@ namespace CasinoExpansion.Casino
         }
 
         public void Announce(string text) => LastResult = text;
+
+        // Deals whatever is in the hands but not yet on the felt. Games call this after adding
+        // cards mid-round -- a blackjack hit has to land before the next prompt, not after the
+        // whole decision sequence is over.
+        private int[] _placed;
+
+        public System.Collections.IEnumerator Show(HandSet hands)
+        {
+            if (!TableCards.Supported(_controller))
+            {
+                yield return new WaitForSeconds(0.5f);
+                yield break;
+            }
+
+            var from = new int[hands.Hands.Count];
+            if (_placed != null)
+                for (int i = 0; i < from.Length && i < _placed.Length; i++) from[i] = _placed[i];
+
+            yield return MelonCoroutines.Start(TableCards.DealOut(_controller, hands, 0.32f, from));
+
+            _placed = hands.Hands.Select(h => h.Cards.Count).ToArray();
+        }
 
         public System.Collections.IEnumerator Wait(float seconds)
         {

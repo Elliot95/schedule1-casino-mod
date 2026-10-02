@@ -164,11 +164,15 @@ namespace CasinoExpansion.Casino
             // more than a pair of choices.
             chrome.DecisionRow = new GameObject("Decisions");
             chrome.DecisionRow.transform.SetParent(chrome.Root.transform, false);
-            for (int i = 0; i < 2; i++)
+
+            // Four is the most any game asks for: Ride the Bus's suit guess. Blackjack asks
+            // three, everything else two. They are laid out per prompt in Refresh rather than
+            // fixed here, so two buttons stay centred instead of sitting where four would.
+            for (int i = 0; i < MaxDecisions; i++)
             {
                 int index = i;
                 var btn = CloneButton(readyGo, chrome.DecisionRow.transform,
-                    new Vector2(-108f + i * 216f, -134f), new Vector2(200f, 40f));
+                    new Vector2(0f, -134f), new Vector2(200f, 40f));
                 btn.Label.fontSize = 16f;
                 btn.Button.onClick.AddListener((UnityAction)(() =>
                     TableSession.For(chrome.Controller)?.Answer(index)));
@@ -313,13 +317,7 @@ namespace CasinoExpansion.Casino
             {
                 bool asking = live != null && live.Waiting;
                 chrome.DecisionRow.SetActive(asking);
-                if (asking)
-                    for (int i = 0; i < chrome.Decisions.Count; i++)
-                    {
-                        bool has = i < live.Options.Length;
-                        chrome.Decisions[i].Go.SetActive(has);
-                        if (has) chrome.Decisions[i].Label.text = live.Options[i];
-                    }
+                if (asking) LayOutDecisions(chrome, live.Options);
             }
 
             if (chrome.Status?.Label != null)
@@ -330,6 +328,34 @@ namespace CasinoExpansion.Casino
                     game == ETableGame.Vanilla ? "<size=80%>House rules — the table plays as normal.</size>"
                     : !string.IsNullOrEmpty(session?.LastResult) ? session.LastResult
                     : "<size=85%>Set your buy-in, then ready up.</size>";
+            }
+        }
+
+        private const int MaxDecisions = 4;
+
+        // Buttons are sized and spread to fit however many the prompt offers, inside the
+        // container's 252px half-width. Anything wider spills onto the felt, which is what the
+        // first pass at this panel did.
+        private static void LayOutDecisions(Chrome chrome, string[] options)
+        {
+            int n = Mathf.Clamp(options.Length, 1, MaxDecisions);
+            float width = n switch { 1 => 220f, 2 => 200f, 3 => 160f, _ => 120f };
+            float step = n switch { 1 => 0f, 2 => 216f, 3 => 170f, _ => 126f };
+            float start = -step * (n - 1) / 2f;
+
+            for (int i = 0; i < chrome.Decisions.Count; i++)
+            {
+                bool used = i < n;
+                var btn = chrome.Decisions[i];
+                btn.Go.SetActive(used);
+                if (!used) continue;
+
+                btn.Label.text = options[i];
+                btn.Label.fontSize = n >= 4 ? 13f : n == 3 ? 15f : 16f;
+
+                var rect = btn.Go.GetComponent<RectTransform>();
+                rect.anchoredPosition = new Vector2(start + i * step, -134f);
+                rect.sizeDelta = new Vector2(width, 40f);
             }
         }
 
