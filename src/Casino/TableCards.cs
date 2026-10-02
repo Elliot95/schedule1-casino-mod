@@ -92,6 +92,18 @@ namespace CasinoExpansion.Casino
                 bj.CurrentStage = Bj.EStage.Dealing;
 
                 LogVanillaDeck(bj);
+
+                // Everything dealing depends on: who the controller thinks is playing, and
+                // whether the seat it keys card positions by actually has any.
+                int seated = bj.playersInCurrentRound?.Count ?? -1;
+                int seat = LocalSeat(c);
+                int slots = -1;
+                try { slots = bj.GetPlayerCardPositions(seat)?.Length ?? -1; } catch { }
+                int dealerSlots = bj.DealerCardPositions?.Length ?? -1;
+
+                MelonLogger.Msg($"[cards] round open: {seated} in round, local seat {seat}, " +
+                                $"{slots} card positions for that seat, {dealerSlots} for the dealer, " +
+                                $"stage {bj.CurrentStage}");
             }
             catch (Exception e) { MelonLogger.Warning($"[cards] could not open the round: {e.Message}"); }
         }
@@ -102,6 +114,7 @@ namespace CasinoExpansion.Casino
         // round: how many card values are in the deck, how many have been drawn, and how many
         // physical card objects the table owns.
         private static bool _loggedDeck;
+        private static int _traced;
 
         private static void LogVanillaDeck(Bj bj)
         {
@@ -177,8 +190,23 @@ namespace CasinoExpansion.Casino
                 playing.SetCard(Suit(card), Value(card.Rank), true);
                 playing.SetFaceUp(true, true);
 
+                var before = playing.transform.position;
+
                 if (toDealer) bj.RpcLogic___AddCardToDealerHand_3615296227(playing.CardID);
                 else bj.RpcLogic___AddCardToPlayerHand_2801973956(seat, playing.CardID);
+
+                // Logged for the first few cards of a session only. A card that does not move
+                // was dealt to a hand the controller has no position for, which is invisible
+                // from the outside and has already cost two wrong diagnoses.
+                if (_traced < 4)
+                {
+                    _traced++;
+                    var after = playing.transform.position;
+                    MelonLogger.Msg($"[cards] {card} id='{playing.CardID}' " +
+                                    $"{(toDealer ? "dealer" : $"seat {seat}")} " +
+                                    $"moved={(Vector3.Distance(before, after) > 0.001f)} " +
+                                    $"from {before} to {after} active={playing.gameObject.activeInHierarchy}");
+                }
                 return true;
             }
             catch (Exception e)
