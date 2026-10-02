@@ -32,6 +32,7 @@ namespace CasinoExpansion.Casino
             public GameObject OptionList;
             public readonly List<Text_> Options = new List<Text_>();
             public Controller Controller;
+            public BetPanel Panel;
             public RectTransform ReadyRect;
             public Vector2 ReadyHome;
             public bool LoggedKeys;
@@ -82,6 +83,7 @@ namespace CasinoExpansion.Casino
                 Panels[panel.GetInstanceID()] = chrome;
             }
 
+            chrome.Panel = panel;
             chrome.Controller = game;
             chrome.Root.SetActive(true);
             if (chrome.ReadyRect != null)
@@ -301,6 +303,7 @@ namespace CasinoExpansion.Casino
                 chrome.Players.Label.text = BuildPlayerList(chrome);
 
             var live = TableSession.For(chrome.Controller);
+            ReadStake(chrome, live);
 
             if (chrome.Side != null)
             {
@@ -332,6 +335,35 @@ namespace CasinoExpansion.Casino
                     : !string.IsNullOrEmpty(session?.LastResult) ? session.LastResult
                     : "<size=85%>Set your buy-in, then ready up.</size>";
             }
+        }
+
+        // Reads the stake straight off the slider rather than through the game's own
+        // conversion. Three patched seams have now failed to raise the table maximum -- the
+        // const-backed MaximumBet crashes, a GetBetLimits postfix corrupts its out params, and
+        // rescaling GetBetFromSliderValue never reached the bank because SetLocalPlayerBet
+        // clamps the result on its way to LocalPlayerBet. The slider's own position is the one
+        // thing none of that can distort.
+        private static void ReadStake(Chrome chrome, TableSession session)
+        {
+            if (session == null || chrome.Panel == null) return;
+
+            var def = TableGames.For(TableModes.Get(chrome.Controller));
+            if (def == null) return;                       // vanilla table, leave the stake alone
+
+            var slider = chrome.Panel._betSlider;
+            if (slider == null) return;
+
+            float span = slider.maxValue - slider.minValue;
+            float t = Mathf.Approximately(span, 0f) ? 0f
+                    : Mathf.Clamp01((slider.value - slider.minValue) / span);
+
+            float raw = def.Limits.Min + t * (def.Limits.Max - def.Limits.Min);
+            session.Stake = Mathf.Round(raw / 10f) * 10f;
+
+            // Vanilla writes the clamped figure here every refresh, so it has to be overwritten
+            // or the panel reads $1,000 under a slider sitting at $50,000.
+            if (chrome.Panel._betAmount != null)
+                chrome.Panel._betAmount.text = $"${session.Stake:N0}";
         }
 
         private const int MaxDecisions = 4;

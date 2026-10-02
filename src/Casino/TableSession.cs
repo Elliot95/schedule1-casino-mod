@@ -247,7 +247,7 @@ namespace CasinoExpansion.Casino
             // Shown on the table's own input panel where one exists, because the bet panel --
             // where the rest of the chrome lives -- is closed while a hand is in play.
             TableInterface.Active = this;
-            bool onTable = TableInterface.Prompt(_controller, options);
+            bool onTable = TableInterface.Show(prompt, options);
 
             float deadline = Time.unscaledTime + timeout;
             while (_answer < 0 && Time.unscaledTime < deadline) yield return null;
@@ -256,7 +256,7 @@ namespace CasinoExpansion.Casino
             Prompt = null;
             Options = null;
 
-            if (onTable) TableInterface.Done(_controller);
+            if (onTable) TableInterface.Hide();
 
             chosen?.Invoke(pick);
         }

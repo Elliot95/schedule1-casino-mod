@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
@@ -11,24 +10,26 @@ using Controller = Il2CppScheduleOne.Casino.CasinoGameController;
 
 namespace CasinoExpansion.Casino
 {
-    // Runs mod prompts through the table's own in-round interface -- the Hit/Stand buttons and
-    // the Dealer/You score readout that vanilla blackjack uses.
+    // The in-round prompt: our own buttons, on the canvas that stays up while a hand is in play.
     //
-    // This exists because the bet panel, where the rest of the mod chrome lives, is CLOSED
-    // while a hand is in play. Decision buttons built there are invisible exactly when they are
-    // needed, so every prompt timed out and answered itself -- which is how a hand hit its way
-    // to 23 without the player touching anything.
+    // Two things forced this. The bet panel, where the rest of the mod chrome lives, is CLOSED
+    // during a hand -- so prompts built there are invisible exactly when they are needed, and
+    // every one of them timed out and answered itself. And driving vanilla's own Hit and Stand
+    // buttons, which was the previous attempt, pushed blackjack's vocabulary onto games that do
+    // not have hits or stands, and would have broken the vanilla table it borrowed them from.
     //
-    // Vanilla's own buttons are reused rather than cloned wholesale: HitClicked and
-    // StandClicked are prefixed, so a click answers our prompt and never reaches the vanilla
-    // controller. Games offering a third or fourth choice get clones of the Hit button added to
-    // the same container, which inherit its look for free.
+    // So: the Hit button is used as a STYLE DONOR and nothing more. Cloning it inherits the
+    // font, the fill, the hover state and the canvas scaling for free, which is the same trick
+    // the bet-panel chrome uses, and the clones carry our labels and our handlers.
     public static class TableInterface
     {
         private static BjUI _ui;
-        private static readonly List<Button> Extra = new List<Button>();
-        private static Button _hit, _stand;
-        private static string _hitHome = "Hit", _standHome = "Stand";
+        private static GameObject _root;
+        private static Il2CppTMPro.TextMeshProUGUI _promptLabel;
+        private static readonly List<Button> Buttons = new List<Button>();
+        private static readonly List<Il2CppTMPro.TextMeshProUGUI> Labels = new List<Il2CppTMPro.TextMeshProUGUI>();
+
+        private const int MaxChoices = 4;
 
         private static BjUI Interface()
         {
@@ -36,67 +37,100 @@ namespace CasinoExpansion.Casino
             return _ui;
         }
 
-        public static bool Available => Interface() != null;
+        public static TableSession Active { get; set; }
 
-        // Hit is exposed directly; Stand is not, so it is found among the input container's
-        // buttons by its label rather than by a guessed child index.
-        private static void Locate()
+        // Built once against the interface's own Hit button. Returns false if the table has no
+        // such interface, so the caller can fall back to the bet-panel row.
+        private static bool Build()
         {
+            if (_root != null) return true;
+
             var ui = Interface();
-            if (ui == null || _hit != null) return;
+            var donor = ui?.HitButton?.gameObject;
+            if (donor == null) return false;
 
-            _hit = ui.HitButton;
-            if (_hit == null) return;
+            var parent = donor.transform.parent;
+            if (parent == null) return false;
 
-            _hitHome = LabelOf(_hit)?.text ?? "Hit";
+            _root = new GameObject("ModPrompt");
+            _root.transform.SetParent(parent, false);
 
-            var parent = _hit.transform.parent;
-            if (parent == null) return;
+            var donorRect = donor.GetComponent<RectTransform>();
+            Vector2 home = donorRect.anchoredPosition;
+            Vector2 size = donorRect.rect.size;
 
-            var buttons = parent.GetComponentsInChildren<Button>(true);
-            for (int i = 0; i < buttons.Length; i++)
+            // The prompt sits above the buttons, in the gap the vanilla layout leaves clear.
+            _promptLabel = CloneLabel(donor, _root.transform,
+                home + new Vector2(0f, size.y * 1.6f), new Vector2(size.x * 1.6f, size.y));
+
+            for (int i = 0; i < MaxChoices; i++)
             {
-                var b = buttons[i];
-                if (b == null || b.Pointer == _hit.Pointer) continue;
+                int answer = i;
+                var go = Object.Instantiate(donor, _root.transform);
+                go.name = $"ModChoice{i}";
 
-                var label = LabelOf(b);
-                if (label != null && label.text.IndexOf("stand", StringComparison.OrdinalIgnoreCase) >= 0)
+                var rect = go.GetComponent<RectTransform>();
+                rect.anchoredPosition = home - new Vector2(0f, i * (size.y + 8f));
+                rect.sizeDelta = size;
+
+                var button = go.GetComponent<Button>();
+                if (button != null)
                 {
-                    _stand = b;
-                    _standHome = label.text;
-                    break;
+                    Mute(button.onClick);
+                    button.onClick.AddListener((UnityAction)(() => Active?.Answer(answer)));
                 }
+
+                Buttons.Add(button);
+                Labels.Add(go.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>(true));
+                go.SetActive(false);
             }
+
+            _root.SetActive(false);
+            MelonLogger.Msg($"[iface] prompt built on '{parent.name}' from the Hit button");
+            return true;
         }
 
-        private static Il2CppTMPro.TextMeshProUGUI LabelOf(Button b) =>
-            b == null ? null : b.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>(true);
-
-        // Shows the prompt on the table's own input panel. Returns false if the interface is
-        // not available, so the session can fall back to the bet-panel buttons.
-        public static bool Prompt(Controller controller, string[] options)
+        private static Il2CppTMPro.TextMeshProUGUI CloneLabel(GameObject donor, Transform parent, Vector2 pos, Vector2 size)
         {
-            var ui = Interface();
-            if (ui == null) return false;
+            var go = Object.Instantiate(donor, parent);
+            go.name = "ModPromptText";
 
-            Locate();
-            if (_hit == null) return false;
+            var rect = go.GetComponent<RectTransform>();
+            rect.anchoredPosition = pos;
+            rect.sizeDelta = size;
+
+            var button = go.GetComponent<Button>();
+            if (button != null) { Mute(button.onClick); button.interactable = false; }
+
+            var image = go.GetComponent<Image>();
+            if (image != null) image.color = new Color(0f, 0f, 0f, 0.55f);
+
+            var label = go.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>(true);
+            if (label != null) label.fontSize = 15f;
+            return label;
+        }
+
+        private static void Mute(UnityEventBase evt)
+        {
+            if (evt == null) return;
+            for (int i = 0; i < evt.GetPersistentEventCount(); i++)
+                evt.SetPersistentListenerState(i, UnityEventCallState.Off);
+        }
+
+        public static bool Show(string prompt, string[] options)
+        {
+            if (!Build()) return false;
 
             try
             {
-                // Puts the input container on screen with its usual fade, the same call vanilla
-                // makes when it is a player's turn.
-                ui.LocalPlayerReadyForInput();
+                _root.SetActive(true);
+                if (_promptLabel != null) _promptLabel.text = prompt;
 
-                SetLabel(_hit, options.Length > 0 ? options[0] : _hitHome);
-                if (_stand != null) SetLabel(_stand, options.Length > 1 ? options[1] : _standHome);
-
-                EnsureExtras(options.Length);
-                for (int i = 0; i < Extra.Count; i++)
+                for (int i = 0; i < Buttons.Count; i++)
                 {
-                    bool used = i + 2 < options.Length;
-                    Extra[i].gameObject.SetActive(used);
-                    if (used) SetLabel(Extra[i], options[i + 2]);
+                    bool used = i < options.Length;
+                    Buttons[i]?.gameObject.SetActive(used);
+                    if (used && Labels[i] != null) Labels[i].text = options[i];
                 }
                 return true;
             }
@@ -107,25 +141,13 @@ namespace CasinoExpansion.Casino
             }
         }
 
-        public static void Done(Controller controller)
+        public static void Hide()
         {
-            try
-            {
-                foreach (var b in Extra) if (b != null) b.gameObject.SetActive(false);
-                if (_hit != null) SetLabel(_hit, _hitHome);
-                if (_stand != null) SetLabel(_stand, _standHome);
-            }
-            catch { }
+            if (_root != null) _root.SetActive(false);
         }
 
-        // End of hand: the scores come down and no stray click can answer a dead prompt.
-        public static void Finish()
-        {
-            Active = null;
-            try { Interface()?.HideScores(); } catch { }
-        }
-
-        // The Dealer/You readout. Shown with the game's own call so it fades in as usual.
+        // The table's own Dealer/You readout, reused as-is: it is two numbers in the right
+        // place, and every game here has a dealer side and a player side.
         public static void Scores(string dealer, string player)
         {
             var ui = Interface();
@@ -140,81 +162,11 @@ namespace CasinoExpansion.Casino
             catch { }
         }
 
-        private static void SetLabel(Button b, string text)
+        public static void Finish()
         {
-            var label = LabelOf(b);
-            if (label != null) label.text = text;
-        }
-
-        // Clones of the Hit button, stacked under the pair, for games offering more than two
-        // choices. Built once and reused, because the interface is a persistent singleton.
-        private static void EnsureExtras(int optionCount)
-        {
-            int needed = Mathf.Max(0, optionCount - 2);
-            if (Extra.Count >= needed || _hit == null) return;
-
-            var parent = _hit.transform.parent;
-            var home = _hit.GetComponent<RectTransform>();
-            var step = _stand != null
-                ? _stand.GetComponent<RectTransform>().anchoredPosition - home.anchoredPosition
-                : new Vector2(0f, -48f);
-
-            while (Extra.Count < needed)
-            {
-                int index = Extra.Count + 2;
-                var go = Object.Instantiate(_hit.gameObject, parent);
-                go.name = $"ModChoice{index}";
-
-                var rect = go.GetComponent<RectTransform>();
-                rect.anchoredPosition = home.anchoredPosition + step * index;
-
-                var button = go.GetComponent<Button>();
-                if (button != null)
-                {
-                    for (int i = 0; i < button.onClick.GetPersistentEventCount(); i++)
-                        button.onClick.SetPersistentListenerState(i, UnityEventCallState.Off);
-
-                    int answer = index;
-                    button.onClick.AddListener((UnityAction)(() => Answer(answer)));
-                }
-
-                go.SetActive(false);
-                Extra.Add(button);
-            }
-        }
-
-        // Every route into an answer goes through here, so a click on a vanilla button and a
-        // click on a clone are handled identically.
-        private static void Answer(int index)
-        {
-            var session = Active;
-            session?.Answer(index);
-        }
-
-        // The session currently asking. Set by TableSession around a prompt; the button
-        // prefixes need to know who to answer without walking the scene.
-        public static TableSession Active { get; set; }
-
-        [HarmonyPatch(typeof(BjUI), nameof(BjUI.HitClicked))]
-        internal static class HitPatch
-        {
-            private static bool Prefix()
-            {
-                if (Active == null || !Active.Waiting) return true;   // vanilla hand, let it through
-                Active.Answer(0);
-                return false;
-            }
-        }
-
-        [HarmonyPatch(typeof(BjUI), nameof(BjUI.StandClicked))]
-        internal static class StandPatch
-        {
-            private static bool Prefix()
-            {
-                if (Active == null || !Active.Waiting) return true;
-                Active.Answer(1);
-                return false;
-            }
+            Active = null;
+            Hide();
+            try { Interface()?.HideScores(); } catch { }
         }
     }
 }
