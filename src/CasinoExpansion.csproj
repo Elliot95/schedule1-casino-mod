@@ -35,6 +35,10 @@
       <HintPath>$(InteropDir)\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(InteropDir)\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(InteropDir)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>

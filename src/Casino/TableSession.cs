@@ -143,6 +143,11 @@ namespace CasinoExpansion.Casino
                 Bank.TryGetCashBalance(out var bal);
                 LastResult = $"Not enough cash: need ${stake:N0}, have ${bal:N0}";
                 MelonLogger.Msg($"[session] {LastResult}");
+
+                // Hand ready back, or the table keeps retrying the same unaffordable stake
+                // several times a second for as long as the flag stays set.
+                try { if (AllReady()) _controller.ToggleLocalPlayerReady(); } catch { }
+
                 _dealing = false;
                 yield break;
             }

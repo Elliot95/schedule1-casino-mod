@@ -25,6 +25,8 @@ namespace CasinoExpansion.Casino
     {
         private static BjUI _ui;
         private static GameObject _root;
+        private static readonly List<GameObject> Hidden = new List<GameObject>();
+        private static float _groupAlpha = -1f;
         private static Il2CppTMPro.TextMeshProUGUI _promptLabel;
         private static readonly List<Button> Buttons = new List<Button>();
         private static readonly List<Il2CppTMPro.TextMeshProUGUI> Labels = new List<Il2CppTMPro.TextMeshProUGUI>();
@@ -123,6 +125,12 @@ namespace CasinoExpansion.Casino
 
             try
             {
+                // Vanilla's own Hit and Stand sit in this same container and stay live
+                // underneath ours, so a click landed on whichever happened to be on top --
+                // which is how a hand meant for Player ended up backing Banker.
+                HideVanillaButtons();
+                ShowContainer();
+
                 _root.SetActive(true);
                 if (_promptLabel != null) _promptLabel.text = prompt;
 
@@ -144,6 +152,53 @@ namespace CasinoExpansion.Casino
         public static void Hide()
         {
             if (_root != null) _root.SetActive(false);
+
+            foreach (var go in Hidden) if (go != null) go.SetActive(true);
+            Hidden.Clear();
+            RestoreContainer();
+        }
+
+        // The input container is faded out by a CanvasGroup until vanilla decides it is the
+        // player's turn. Buttons inside it are invisible AND unclickable, which is why a Three
+        // Card Poker hand folded a straight: the prompt was never answerable, so it timed out.
+        private static void ShowContainer()
+        {
+            var group = Interface()?.InputContainerCanvasGroup;
+            if (group == null) return;
+
+            if (_groupAlpha < 0f) _groupAlpha = group.alpha;
+            group.alpha = 1f;
+            group.interactable = true;
+            group.blocksRaycasts = true;
+        }
+
+        private static void RestoreContainer()
+        {
+            var group = Interface()?.InputContainerCanvasGroup;
+            if (group == null || _groupAlpha < 0f) return;
+
+            group.alpha = _groupAlpha;
+            _groupAlpha = -1f;
+        }
+
+        // Everything in the input container that is not ours. Found by walking the siblings
+        // rather than by name, because only HitButton is exposed and Stand is not.
+        private static void HideVanillaButtons()
+        {
+            var donor = Interface()?.HitButton?.gameObject;
+            var parent = donor?.transform.parent;
+            if (parent == null) return;
+
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                var child = parent.GetChild(i).gameObject;
+                if (child == null || child == _root) continue;
+                if (child.name.StartsWith("Mod")) continue;
+                if (!child.activeSelf) continue;
+
+                child.SetActive(false);
+                Hidden.Add(child);
+            }
         }
 
         // The table's own Dealer/You readout, reused as-is: it is two numbers in the right
