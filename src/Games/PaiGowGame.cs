@@ -16,7 +16,8 @@ namespace CasinoExpansion.Games
     // choice at all. The house way is also very close to optimal, so little is lost.
     //
     // Chosen rules: no joker (a 52-card deck, which is what Deck gives us), dealer wins copies,
-    // and a 5% commission on wins to cover the push-heavy edge.
+    // and a win pays 98% rather than even money, which is where the edge sits in a game
+    // that pushes as often as this one.
     public sealed class PaiGowGame : ITableGame, IDecidingGame
     {
         public const string PlayerHigh = "Player";
@@ -190,7 +191,7 @@ namespace CasinoExpansion.Games
             string detail = $"High {myHigh} ({hands[PlayerHigh]}) vs {theirHigh} ({hands[DealerHigh]}); " +
                             $"low {hands[PlayerLow]} vs {hands[DealerLow]}";
 
-            if (highWon && lowWon) return new Outcome(1.95f, $"Both hands win — less 5% commission. {detail}");
+            if (highWon && lowWon) return new Outcome(1.98f, $"Both hands win — pays 98%. {detail}");
             if (!highWon && !lowWon) return new Outcome(0f, $"Dealer takes both. {detail}");
             return new Outcome(1f, $"One each — push. {detail}");
         }

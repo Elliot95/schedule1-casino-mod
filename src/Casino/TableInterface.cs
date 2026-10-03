@@ -138,7 +138,10 @@ namespace CasinoExpansion.Casino
                 {
                     bool used = i < options.Length;
                     Buttons[i]?.gameObject.SetActive(used);
-                    if (used && Labels[i] != null) Labels[i].text = options[i];
+                    if (!used) continue;
+
+                    if (Labels[i] != null) Labels[i].text = options[i];
+                    Tint(Buttons[i], options[i]);
                 }
                 return true;
             }
@@ -147,6 +150,23 @@ namespace CasinoExpansion.Casino
                 MelonLogger.Warning($"[iface] could not show the prompt: {e.Message}");
                 return false;
             }
+        }
+
+        // Baccarat's three bets are the only place a colour means something: red for the
+        // default, blue for banker, green for tie, so the side being backed is readable at a
+        // glance rather than by reading three similar words.
+        private static readonly Color Default = new Color(0.55f, 0.16f, 0.16f, 1f);
+        private static readonly Color Blue = new Color(0.16f, 0.32f, 0.60f, 1f);
+        private static readonly Color Green = new Color(0.16f, 0.48f, 0.26f, 1f);
+
+        private static void Tint(Button button, string label)
+        {
+            var image = button?.GetComponent<Image>();
+            if (image == null) return;
+
+            image.color = label == "Banker" ? Blue
+                        : label == "Tie" ? Green
+                        : Default;
         }
 
         public static void Hide()

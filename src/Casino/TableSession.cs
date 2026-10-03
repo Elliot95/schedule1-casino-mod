@@ -197,6 +197,11 @@ namespace CasinoExpansion.Casino
                 LastResult = Describe(game, hands);
             }
 
+            // Showdown: the dealer's hand turns over only once every decision is made.
+            if (TableCards.Supported(_controller))
+                yield return MelonCoroutines.Start(TableCards.Reveal(_controller));
+
+            LastResult = Describe(game, hands);
             yield return new WaitForSeconds(1.2f);
 
             var outcome = game.Resolve(hands, wager, Side);
@@ -252,6 +257,10 @@ namespace CasinoExpansion.Casino
 
         public bool Waiting => Options != null;
 
+        // True while the prompt is being shown on the table itself, so the bet panel does not
+        // draw a second copy of the same buttons beside it.
+        public bool PromptOnTable { get; private set; }
+
         public void Answer(int index)
         {
             if (Options != null && index >= 0 && index < Options.Length) _answer = index;
@@ -272,6 +281,7 @@ namespace CasinoExpansion.Casino
             // where the rest of the chrome lives -- is closed while a hand is in play.
             TableInterface.Active = this;
             bool onTable = TableInterface.Show(prompt, options);
+            PromptOnTable = onTable;
 
             float deadline = Time.unscaledTime + timeout;
             while (_answer < 0 && Time.unscaledTime < deadline) yield return null;
@@ -280,6 +290,7 @@ namespace CasinoExpansion.Casino
             Prompt = null;
             Options = null;
 
+            PromptOnTable = false;
             if (onTable) TableInterface.Hide();
 
             chosen?.Invoke(pick);

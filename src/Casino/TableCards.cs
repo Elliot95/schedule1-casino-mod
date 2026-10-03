@@ -62,6 +62,7 @@ namespace CasinoExpansion.Casino
             RememberHomes(bj);
             _nextCard = 0;
             Used.Clear();
+            Concealed.Clear();
 
             try
             {
@@ -230,7 +231,7 @@ namespace CasinoExpansion.Casino
         // Deals one card and returns once it has been placed. Face-up throughout: none of the
         // house-banked games in this mod have a hole card, and a face-down card the player can
         // never turn over just reads as a bug.
-        public static bool Place(Controller c, int seat, bool toDealer, Card card, int row = 0)
+        public static bool Place(Controller c, int seat, bool toDealer, Card card, int row = 0, bool faceUp = true)
         {
             var bj = c?.TryCast<Bj>();
             if (bj == null) return false;
@@ -247,7 +248,8 @@ namespace CasinoExpansion.Casino
                 if (row > 0) target += RowOffset(bj, seat, toDealer) * row;
 
                 playing.SetCard(Suit(card), Value(card.Rank), true);
-                playing.SetFaceUp(true, true);
+                playing.SetFaceUp(faceUp, true);
+                if (!faceUp) Concealed.Add(playing);
 
                 // Moved directly rather than through AddCardToPlayerHand. That RPC body accepts
                 // the card and leaves it sitting on the deck -- confirmed by tracing every
@@ -333,6 +335,24 @@ namespace CasinoExpansion.Casino
             return slots[1].position - slots[0].position;
         }
 
+        // Cards dealt face down, so they can be turned over together at the showdown.
+        private static readonly List<PlayingCard> Concealed = new List<PlayingCard>();
+
+        // Turns the dealer's hand up. Called once the player has finished deciding -- until
+        // then, seeing what the dealer holds would answer every question the game asks.
+        public static IEnumerator Reveal(Controller c, float gap = 0.25f)
+        {
+            for (int i = 0; i < Concealed.Count; i++)
+            {
+                var card = Concealed[i];
+                if (card == null) continue;
+
+                card.SetFaceUp(true, true);
+                yield return new WaitForSeconds(gap);
+            }
+            Concealed.Clear();
+        }
+
         // A hand belongs to the dealer if it is named for the banker -- "Banker low" included,
         // so Pai Gow's two dealer hands both land on the dealer's side.
         public static bool IsDealerHand(string name) =>
@@ -370,7 +390,11 @@ namespace CasinoExpansion.Casino
 
                     bool dealer = IsDealerHand(hand.Name);
 
-                    Place(c, seat, dealer, hand.Cards[round], RowFor(hands, hi));
+                    // The dealer's first card is the upcard every one of these games shows;
+                    // everything else on the dealer's side stays down until the showdown.
+                    bool faceUp = !dealer || round == 0;
+
+                    Place(c, seat, dealer, hand.Cards[round], RowFor(hands, hi), faceUp);
                     yield return new WaitForSeconds(gap);
                 }
             }

@@ -61,7 +61,7 @@ namespace CasinoExpansion.Casino
                 "Seven cards, split into five and two.",
                 "The five must outrank the two.",
                 "You choose the two in front.",
-                "Win both to win, less 5%.",
+                "Win both to win — pays 98%.",
                 "One each is a push.",
             },
             ETableGame.RedDog => new[]

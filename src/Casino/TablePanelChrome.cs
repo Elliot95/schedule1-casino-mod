@@ -308,7 +308,7 @@ namespace CasinoExpansion.Casino
 
             if (chrome.DecisionRow != null)
             {
-                bool asking = live != null && live.Waiting;
+                bool asking = live != null && live.Waiting && !live.PromptOnTable;
                 chrome.DecisionRow.SetActive(asking);
                 if (asking) LayOutDecisions(chrome, live.Options);
             }
