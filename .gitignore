@@ -2,3 +2,5 @@ bin/
 obj/
 dist/
 *.user
+tools/*/bin/
+tools/*/obj/

@@ -69,16 +69,38 @@ namespace CasinoExpansion.Games
 
             if (wager.Extra <= 0f) return new Outcome(0f, $"Folded. {detail}");
 
+            // The ante bonus. Paid on the ante for a straight or better whatever the dealer
+            // holds -- it is not a wager against the dealer, it is a prize for the hand. Left
+            // out of the first pass, which measured a 5% house edge against a real game's 2%;
+            // this is most of that difference.
+            float bonus = mine.Rank switch
+            {
+                EHandRank.StraightFlush => 5f,
+                EHandRank.Trips => 4f,
+                EHandRank.Straight => 1f,
+                _ => 0f,
+            };
+            float ante = wager.Opening;
+            float total = wager.Total;
+            string bonusNote = bonus > 0f ? $" Ante bonus {bonus:0} to 1." : "";
+
             // Queen-high or better. A pair or anything above always clears the bar, so only a
             // high-card hand needs checking, and its top kicker sits in the second nibble.
             bool qualifies = theirs.Rank > EHandRank.HighCard || TopCard(dealer) >= 12;
 
-            if (!qualifies)
-                return new Outcome(1.5f, $"Dealer does not qualify — ante pays. {detail}");
+            float extra = ante * bonus;
 
-            if (mine.Value > theirs.Value) return new Outcome(2f, $"You win. {detail}");
-            if (mine.Value < theirs.Value) return new Outcome(0f, $"Dealer wins. {detail}");
-            return new Outcome(1f, $"Tie — stakes returned. {detail}");
+            if (!qualifies)
+                return new Outcome((total * 1.5f + extra) / total,
+                    $"Dealer does not qualify — ante pays.{bonusNote} {detail}");
+
+            if (mine.Value > theirs.Value)
+                return new Outcome((total * 2f + extra) / total, $"You win.{bonusNote} {detail}");
+
+            if (mine.Value < theirs.Value)
+                return new Outcome(extra / total, $"Dealer wins.{bonusNote} {detail}");
+
+            return new Outcome((total + extra) / total, $"Tie — stakes returned.{bonusNote} {detail}");
         }
 
         private static int TopCard(Hand hand)

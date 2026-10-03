@@ -13,16 +13,24 @@ Adds new games to Schedule I's casino. **Work in progress.**
 
 - **Eight table games**, picked at any casino table from a selector in the bet panel. Real cards are dealt onto the felt, and decisions are made at the table.
 
-  | Game | The decision | House edge |
-  |---|---|---|
-  | Blackjack (high roller) | Hit, stand, double, split without limit | ~0.5% |
-  | Ride the Bus (high roller) | Four guesses; cash out after any | ~5% |
-  | Baccarat | Which side to back | 1.2% / 1.1% / 14% |
-  | Casino Hold'em | Call twice the ante, or fold, on the flop | ~2.2% |
-  | Three Card Poker | Play or fold after three cards | ~3.4% |
-  | Pai Gow Poker | Which two cards to set in front | ~2.8% |
-  | Red Dog | Raise or stand on the spread | ~3.2% |
-  | House game | — the table's own, untouched | |
+  | Game | The decision | Returns | Measured playing |
+  |---|---|---|---|
+  | Blackjack (high roller) | Hit, stand, double, split without limit | 94.4% | mimic the dealer |
+  | Ride the Bus (high roller) | Four guesses; cash out after any | 86.1% | riding all four |
+  | Ride the Bus (high roller) | — | 94.7% | cashing out after two |
+  | Baccarat — Player | Which side to back | 98.7% | — |
+  | Baccarat — Banker | | 99.0% | — |
+  | Baccarat — Tie | | 84.9% | — |
+  | Casino Hold'em | Call twice the ante, or fold, on the flop | 97.4% | always calling |
+  | Three Card Poker | Play or fold after three cards | 98.1% | play Q-6-4 or better |
+  | Pai Gow Poker | Which two cards to set in front | 96.7% | the house way |
+  | Red Dog | Raise or stand on the spread | 97.2% | raise on spread 7+ |
+  | House game | — the table's own, untouched | | |
+
+  These are **measured**, not calculated: 300,000 rounds per game through the shipped code,
+  with `tools/rtp`. Return depends on how you play, so the strategy used is named beside each.
+  Blackjack's 94.4% is what mimicking the dealer returns — played properly it is far closer to
+  break-even, and the figure here is the floor rather than the ceiling.
 
 - **Stakes to $50,000** on the mod games, with $1,000 nudges either side of the slider.
 - **Prize wheel** — spawns near you; a 53-slice wheel with a jackpot, tuned to stay under the slot machines' real return.

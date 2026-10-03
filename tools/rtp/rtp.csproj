@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <AssemblyName>rtp</AssemblyName>
+    <NoWarn>CS0168;CS0219;CS1998</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\Core\Deck.cs" />
+    <Compile Include="..\..\src\Core\PokerHands.cs" />
+    <Compile Include="..\..\src\Casino\ITableGame.cs" />
+    <Compile Include="..\..\src\Games\BlackjackHrGame.cs" />
+    <Compile Include="..\..\src\Games\RideTheBusHrGame.cs" />
+    <Compile Include="..\..\src\Games\BaccaratGame.cs" />
+    <Compile Include="..\..\src\Games\CasinoHoldemGame.cs" />
+    <Compile Include="..\..\src\Games\ThreeCardPokerGame.cs" />
+    <Compile Include="..\..\src\Games\PaiGowGame.cs" />
+    <Compile Include="..\..\src\Games\RedDogGame.cs" />
+  </ItemGroup>
+</Project>
