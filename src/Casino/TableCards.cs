@@ -57,6 +57,10 @@ namespace CasinoExpansion.Casino
         {
             var bj = c?.TryCast<Bj>();
             if (bj == null) return;
+            _nextCard = 0;
+            _playerSlot = 0;
+            _dealerSlot = 0;
+
             try { bj.ResetCards(); }
             catch (Exception e) { MelonLogger.Warning($"[cards] reset failed: {e.Message}"); }
         }
@@ -184,28 +188,27 @@ namespace CasinoExpansion.Casino
 
             try
             {
-                var playing = bj.DrawCard();
-                if (playing == null) { MelonLogger.Warning("[cards] table ran out of card objects"); return false; }
+                var playing = NextCardObject(bj);
+                if (playing == null) { MelonLogger.Warning("[cards] no free card object left"); return false; }
+
+                var slot = Slot(bj, seat, toDealer);
+                if (slot == null) { MelonLogger.Warning("[cards] no card position free"); return false; }
 
                 playing.SetCard(Suit(card), Value(card.Rank), true);
                 playing.SetFaceUp(true, true);
 
-                var before = playing.transform.position;
+                // Moved directly rather than through AddCardToPlayerHand. That RPC body accepts
+                // the card and leaves it sitting on the deck -- confirmed by tracing every
+                // placement -- presumably because it expects bookkeeping that only its own
+                // StartGame does, and StartGame is the thing this mod suppresses. The card
+                // positions are readable, so the glide the table would have done is done here.
+                playing.GlideTo(slot.position, slot.rotation, 0.35f, true);
 
-                if (toDealer) bj.RpcLogic___AddCardToDealerHand_3615296227(playing.CardID);
-                else bj.RpcLogic___AddCardToPlayerHand_2801973956(seat, playing.CardID);
-
-                // Logged for the first few cards of a session only. A card that does not move
-                // was dealt to a hand the controller has no position for, which is invisible
-                // from the outside and has already cost two wrong diagnoses.
                 if (_traced < 4)
                 {
                     _traced++;
-                    var after = playing.transform.position;
                     MelonLogger.Msg($"[cards] {card} id='{playing.CardID}' " +
-                                    $"{(toDealer ? "dealer" : $"seat {seat}")} " +
-                                    $"moved={(Vector3.Distance(before, after) > 0.001f)} " +
-                                    $"from {before} to {after} active={playing.gameObject.activeInHierarchy}");
+                                    $"{(toDealer ? "dealer" : $"seat {seat}")} -> {slot.name} at {slot.position}");
                 }
                 return true;
             }
@@ -214,6 +217,28 @@ namespace CasinoExpansion.Casino
                 MelonLogger.Warning($"[cards] could not place {card}: {e.Message}");
                 return false;
             }
+        }
+
+        // The table owns a fixed pool of card objects. Handing them out in order, and resetting
+        // the counter each round, keeps a card from being dealt to two places at once.
+        private static int _nextCard;
+        private static int _playerSlot, _dealerSlot;
+
+        private static PlayingCard NextCardObject(Bj bj)
+        {
+            var pool = bj.Cards;
+            if (pool == null || pool.Length == 0) return null;
+            if (_nextCard >= pool.Length) _nextCard = 0;       // wrap rather than stop dealing
+            return pool[_nextCard++];
+        }
+
+        private static Transform Slot(Bj bj, int seat, bool toDealer)
+        {
+            var slots = toDealer ? bj.DealerCardPositions : bj.GetPlayerCardPositions(seat);
+            if (slots == null || slots.Length == 0) return null;
+
+            int i = toDealer ? _dealerSlot++ : _playerSlot++;
+            return slots[Mathf.Min(i, slots.Length - 1)];
         }
 
         // Deals the whole set in the order a dealer would: one to each hand, then round again,
