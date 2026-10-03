@@ -122,6 +122,26 @@ namespace CasinoExpansion.Casino
             catch { return true; }   // never block a round on a replication hiccup
         }
 
+        // Seat 0 is the deck's authority: it rolls the shared seed, everyone else only reads
+        // it back. Picking the lowest seat rather than "whoever is host" needs no extra lookup
+        // -- LocalSeat is already how every client finds its own position.
+        private bool IsAuthority => TableCards.LocalSeat(_controller) == 0;
+
+        private int ReadSeed(string key)
+        {
+            try
+            {
+                var players = _controller.Players;
+                if (players == null) return 0;
+
+                var data = players.GetPlayerData(0);
+                if (data == null) return 0;
+
+                return (int)data.GetData<float>(key);
+            }
+            catch { return 0; }
+        }
+
         public void PublishChoice(ETableGame game)
         {
             try
@@ -162,8 +182,38 @@ namespace CasinoExpansion.Casino
             }
 
             // Seed kept inside the float-exact range so it can be replicated verbatim: every
-            // client rebuilds the identical deck rather than having cards sent to it.
-            int seed = UnityEngine.Random.Range(1, RoundState.MaxExactInt);
+            // client rebuilds the identical deck rather than having cards sent to it. Only
+            // seat 0 rolls one; everyone else reads it back, so two seated players are dealt
+            // the same hand instead of each inventing -- and getting paid out on -- their own.
+            string seedKey = $"{Keys.Seed(_gameId)}:{_round}";
+            int seed;
+
+            if (IsAuthority)
+            {
+                seed = UnityEngine.Random.Range(1, RoundState.MaxExactInt);
+                try { _controller.LocalPlayerData?.SetData<float>(seedKey, (float)seed, true); }
+                catch (Exception e) { MelonLogger.Warning($"[session] could not publish seed: {e.Message}"); }
+            }
+            else
+            {
+                // Falls back to a local roll after two seconds. A round that stalls waiting for
+                // a seed is worse than one dealt from the wrong deck -- and the money guard
+                // below is what actually stops a divergence being paid out twice.
+                seed = 0;
+                float deadline = Time.unscaledTime + 2f;
+                while (seed == 0 && Time.unscaledTime < deadline)
+                {
+                    seed = ReadSeed(seedKey);
+                    if (seed == 0) yield return null;
+                }
+
+                if (seed == 0)
+                {
+                    seed = UnityEngine.Random.Range(1, RoundState.MaxExactInt);
+                    MelonLogger.Warning($"[session] no seed from seat 0 after 2s; dealt from a local roll");
+                }
+            }
+
             var deck = new Deck(seed, game.Decks);
             var hands = new HandSet();
 

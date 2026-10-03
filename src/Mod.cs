@@ -1,7 +1,7 @@
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(CasinoExpansion.Mod), "CasinoExpansion", "0.3.1", "Elliot95")]
+[assembly: MelonInfo(typeof(CasinoExpansion.Mod), "CasinoExpansion", "0.3.2", "Elliot95")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace CasinoExpansion
