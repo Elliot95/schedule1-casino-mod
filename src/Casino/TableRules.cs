@@ -14,6 +14,8 @@ namespace CasinoExpansion.Casino
                 "Blackjack pays 3 to 2.",
                 "Double on your first two cards.",
                 "Split pairs as often as they come.",
+                "Side bets: Perfect Pairs, 21+3.",
+                "Insurance when the dealer shows an ace.",
                 "Stakes up to $50,000.",
             },
             ETableGame.RideTheBusHR => new[]

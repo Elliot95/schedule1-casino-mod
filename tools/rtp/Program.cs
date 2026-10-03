@@ -18,7 +18,10 @@ static class Program
         Console.WriteLine($"{"Game",-26}{"Return",10}{"Edge",10}   Strategy");
         Console.WriteLine(new string('-', 78));
 
-        Run("Blackjack HR", new BlackjackHrGame(), 0, Blackjack, "stand on 17+, no double/split");
+        Run("Blackjack HR", new BlackjackHrGame(), 0, Blackjack, "stand on 17+, no side bets");
+        Run("Blackjack + Perfect Pairs", new BlackjackHrGame(), 1, Blackjack, "same, pairs side bet");
+        Run("Blackjack + 21+3", new BlackjackHrGame(), 2, Blackjack, "same, 21+3 side bet");
+        Run("Blackjack + both", new BlackjackHrGame(), 3, Blackjack, "same, both side bets");
         Run("Ride the Bus HR", new RideTheBusHrGame(), 0, RideAll, "ride all four");
         Run("Ride the Bus (cash @2)", new RideTheBusHrGame(), 0, RideTwo, "cash out after two");
         Run("Baccarat (Player)", new BaccaratGame(), 0, First, "back Player");
@@ -54,6 +57,7 @@ static class Program
         int total = 0;
         int at = prompt.IndexOf("you have ", StringComparison.Ordinal);
         if (at >= 0) int.TryParse(prompt.Substring(at + 9).Split(' ')[0], out total);
+        if (prompt.Contains("insurance")) return 1;                    // decline: it is a bad bet
         return total >= 17 ? 1 : 0;                                    // 0 Hit, 1 Stand
     }
 
@@ -101,6 +105,7 @@ static class Program
 
             var deck = new Deck(rng.Next(1, 16_777_216), game.Decks);
             var hands = new HandSet();
+            hands.Notes["side"] = side;
             game.Deal(hands, deck);
 
             var session = new TableSession { Strategy = strategy };

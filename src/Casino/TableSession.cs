@@ -166,6 +166,12 @@ namespace CasinoExpansion.Casino
             int seed = UnityEngine.Random.Range(1, RoundState.MaxExactInt);
             var deck = new Deck(seed, game.Decks);
             var hands = new HandSet();
+
+            // The side the player picked travels with the round, so a game can read it from
+            // the hands rather than from the session -- which keeps Resolve pure and lets two
+            // tables run different choices at once.
+            hands.Notes["side"] = Side;
+
             game.Deal(hands, deck);
 
             LastResult = $"<b>{game.Title}</b>\n${stake:N0} staked\nDealing...";

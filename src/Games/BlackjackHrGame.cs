@@ -1,4 +1,5 @@
 using System.Collections;
+using UnityEngine;
 using System.Collections.Generic;
 using CasinoExpansion.Casino;
 using CasinoExpansion.Core;
@@ -26,7 +27,9 @@ namespace CasinoExpansion.Games
         public string Title => "Blackjack (high roller)";
         public BetRange Limits => new BetRange(10f, 50_000f);
         public int Decks => 6;
-        public string[] Sides => System.Array.Empty<string>();
+        // Asked before the deal, which is when a side bet has to be placed. Each costs a
+        // tenth of the main stake.
+        public string[] Sides => new[] { "No side bet", "Perfect Pairs", "21+3", "Both" };
 
         public void Deal(HandSet hands, Deck deck)
         {
@@ -59,6 +62,9 @@ namespace CasinoExpansion.Games
         public IEnumerator Decide(TableSession session, HandSet hands, Deck deck, Wager wager)
         {
             var dealer = hands[DealerHand];
+
+            yield return SideBets(session, hands, wager);
+            yield return Insurance(session, hands, wager);
 
             // A natural on either side ends it before anyone acts.
             if (IsBlackjack(hands[PlayerHand]) || IsBlackjack(dealer)) yield break;
@@ -163,6 +169,95 @@ namespace CasinoExpansion.Games
             }
         }
 
+        // Perfect Pairs and 21+3, settled on the opening cards and the dealer's upcard. Both
+        // are decided before the hand is played, so they are taken and scored here and their
+        // winnings carried to Resolve -- which stays pure and must not re-derive a stake.
+        //
+        // The choice itself was made before the deal, through the Sides prompt, because a side
+        // bet placed after seeing the cards is not a bet.
+        private IEnumerator SideBets(TableSession session, HandSet hands, Wager wager)
+        {
+            int choice = (int)hands.Note("side");
+            if (choice <= 0) yield break;
+
+            var player = hands[PlayerHand];
+            var dealer = hands[DealerHand];
+            float unit = Mathf.Max(10f, Mathf.Round(wager.Opening * 0.1f / 10f) * 10f);
+
+            bool wantPairs = choice == 1 || choice == 3;
+            bool wantThree = choice == 2 || choice == 3;
+            float won = 0f;
+
+            if (wantPairs && wager.Add(unit, a => session.TakeRaise(a)))
+            {
+                float odds = PairOdds(player.Cards[0], player.Cards[1]);
+                if (odds > 0f)
+                {
+                    won += unit * (odds + 1f);
+                    session.Announce($"Perfect Pairs pays {odds:0} to 1");
+                    yield return session.Wait(0.8f);
+                }
+            }
+
+            if (wantThree && wager.Add(unit, a => session.TakeRaise(a)))
+            {
+                var three = new List<Card> { player.Cards[0], player.Cards[1], dealer.Cards[0] };
+                float odds = ThreeOdds(PokerHands.Three(three));
+                if (odds > 0f)
+                {
+                    won += unit * (odds + 1f);
+                    session.Announce($"21+3 pays {odds:0} to 1");
+                    yield return session.Wait(0.8f);
+                }
+            }
+
+            if (won > 0f) hands.Notes["sidewin"] = hands.Note("sidewin") + won;
+        }
+
+        // A pair of the same rank: 25 to 1 matching suit, 12 to 1 matching colour, 6 to 1
+        // otherwise. Red is hearts and diamonds, which are suits 1 and 2.
+        private static float PairOdds(Card a, Card b)
+        {
+            if (a.Rank != b.Rank) return 0f;
+            if (a.Suit == b.Suit) return 25f;
+
+            bool redA = a.Suit == 1 || a.Suit == 2;
+            bool redB = b.Suit == 1 || b.Suit == 2;
+            return redA == redB ? 12f : 6f;
+        }
+
+        private static float ThreeOdds(PokerHands.Score score) => score.Rank switch
+        {
+            EHandRank.StraightFlush => 40f,
+            EHandRank.Trips => 30f,
+            EHandRank.Straight => 10f,
+            EHandRank.Flush => 5f,
+            _ => 0f,
+        };
+
+        // Offered when the dealer shows an ace, at half the main stake, paying 2 to 1 if the
+        // dealer has blackjack. It is a bad bet and is offered because a blackjack table that
+        // does not offer it is conspicuously missing something.
+        private IEnumerator Insurance(TableSession session, HandSet hands, Wager wager)
+        {
+            var dealer = hands[DealerHand];
+            if (dealer.Cards[0].Rank != 1) yield break;
+
+            int take = 1;
+            yield return session.Ask($"Dealer shows an ace — insurance for ${wager.Opening / 2f:N0}?",
+                new[] { "Insure", "No" }, i => take = i, 20f, 1);
+
+            if (take != 0) yield break;
+            if (!wager.Add(wager.Opening / 2f, a => session.TakeRaise(a))) yield break;
+
+            if (IsBlackjack(dealer))
+            {
+                hands.Notes["sidewin"] = hands.Note("sidewin") + wager.Opening * 1.5f;
+                session.Announce("Insurance pays 2 to 1");
+                yield return session.Wait(0.8f);
+            }
+        }
+
         // Only on the opening two cards, and only a matching rank. Tens and faces all count ten
         // but are not the same rank, so KQ does not split -- the stricter of the two common
         // house rules.
@@ -210,6 +305,13 @@ namespace CasinoExpansion.Games
 
                 back += ret;
                 lines.Add($"{hand.Name} {mine} {verdict}");
+            }
+
+            float sideWin = hands.Note("sidewin");
+            if (sideWin > 0f)
+            {
+                back += sideWin;
+                lines.Add($"side bets ${sideWin:N0}");
             }
 
             string detail = $"{string.Join("; ", lines)} — dealer {theirs} ({dealer})";
