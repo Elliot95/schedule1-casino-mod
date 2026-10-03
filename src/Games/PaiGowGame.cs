@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Collections.Generic;
+using UnityEngine;
 using CasinoExpansion.Casino;
 using CasinoExpansion.Core;
 
@@ -15,7 +17,7 @@ namespace CasinoExpansion.Games
     //
     // Chosen rules: no joker (a 52-card deck, which is what Deck gives us), dealer wins copies,
     // and a 5% commission on wins to cover the push-heavy edge.
-    public sealed class PaiGowGame : ITableGame
+    public sealed class PaiGowGame : ITableGame, IDecidingGame
     {
         public const string PlayerHigh = "Player";
         public const string PlayerLow = "Player low";
@@ -30,13 +32,85 @@ namespace CasinoExpansion.Games
 
         public void Deal(HandSet hands, Deck deck)
         {
-            var mine = new List<Card>();
+            // The player's seven arrive as one hand. Setting them is the decision, so it would
+            // give the game away to split them before they have been seen.
+            var mine = hands.Add(PlayerHigh);
             var theirs = new List<Card>();
             for (int i = 0; i < 7; i++) { mine.Add(deck.Draw()); theirs.Add(deck.Draw()); }
 
-            Set(hands, mine, PlayerHigh, PlayerLow);
             Set(hands, theirs, DealerHigh, DealerLow);
         }
+
+        // Setting the hand is the real decision in pai gow, and a table does it by moving cards
+        // between two rows. There is no dragging here, so the choice is offered the other way
+        // round: the legal sets are worked out and the player picks one, named by the two cards
+        // it puts in front. The house way is first and the default, so doing nothing plays the
+        // hand the way a dealer would.
+        public IEnumerator Decide(TableSession session, HandSet hands, Deck deck, Wager wager)
+        {
+            var seven = new List<Card>(hands[PlayerHigh].Cards);
+            var options = Splits(seven, 4);
+
+            int pick = 0;
+            if (options.Count > 1)
+            {
+                var labels = new string[options.Count];
+                for (int i = 0; i < options.Count; i++)
+                    labels[i] = $"{Name(options[i].Low[0])} {Name(options[i].Low[1])}";
+
+                yield return session.Ask("Set your hand — which two in front?", labels, i => pick = i, 25f, 0);
+            }
+
+            var chosen = options[Mathf.Clamp(pick, 0, options.Count - 1)];
+
+            hands[PlayerHigh].Cards.Clear();
+            foreach (var c in chosen.High) hands[PlayerHigh].Add(c);
+
+            var low = hands.Add(PlayerLow);
+            foreach (var c in chosen.Low) low.Add(c);
+
+            yield return session.Relayout(hands);
+        }
+
+        private sealed class Split
+        {
+            public List<Card> High, Low;
+            public int LowScore;
+        }
+
+        // Every legal way to split the seven, best low hand first, de-duplicated by the pair of
+        // cards in front. A split whose two-card hand outranks its five-card hand is a foul and
+        // is never offered.
+        private static List<Split> Splits(List<Card> seven, int limit)
+        {
+            var all = new List<Split>();
+            var seen = new HashSet<int>();
+
+            for (int a = 0; a < 7; a++)
+            for (int b = a + 1; b < 7; b++)
+            {
+                var low = new List<Card> { seven[a], seven[b] };
+                var high = new List<Card>(5);
+                for (int i = 0; i < 7; i++) if (i != a && i != b) high.Add(seven[i]);
+
+                int lowScore = TwoCard(low);
+                if (lowScore >= FiveAsTwo(PokerHands.Five(high))) continue;
+                if (!seen.Add(lowScore)) continue;
+
+                all.Add(new Split { High = high, Low = low, LowScore = lowScore });
+            }
+
+            all.Sort((x, y) => y.LowScore.CompareTo(x.LowScore));
+            if (all.Count > limit) all.RemoveRange(limit, all.Count - limit);
+
+            if (all.Count == 0)
+                all.Add(new Split { High = seven.GetRange(2, 5), Low = seven.GetRange(0, 2) });
+
+            return all;
+        }
+
+        private static string Name(Card c) =>
+            $"{"A23456789TJQK"[c.Rank - 1]}{"SHDC"[c.Suit]}";
 
         // The house way, simplified to its load-bearing rule: of every legal way to split seven
         // cards, take the one with the strongest two-card low hand that still ranks below the

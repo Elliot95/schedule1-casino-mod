@@ -290,6 +290,22 @@ namespace CasinoExpansion.Casino
         // whole decision sequence is over.
         private int[] _placed;
 
+        // Clears the felt and deals the whole set again. Needed when a decision rearranges
+        // cards that are already down -- setting a pai gow hand moves two of the seven into a
+        // second row, and there is no way to slide individual cards about after the fact.
+        public System.Collections.IEnumerator Relayout(HandSet hands)
+        {
+            if (!TableCards.Supported(_controller))
+            {
+                yield return new WaitForSeconds(0.3f);
+                yield break;
+            }
+
+            TableCards.Clear(_controller);
+            _placed = null;
+            yield return MelonCoroutines.Start(Show(hands));
+        }
+
         public System.Collections.IEnumerator Show(HandSet hands)
         {
             if (!TableCards.Supported(_controller))

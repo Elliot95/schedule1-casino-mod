@@ -61,8 +61,7 @@ namespace CasinoExpansion.Casino
 
             RememberHomes(bj);
             _nextCard = 0;
-            _playerSlot = 0;
-            _dealerSlot = 0;
+            Used.Clear();
 
             try
             {
@@ -231,7 +230,7 @@ namespace CasinoExpansion.Casino
         // Deals one card and returns once it has been placed. Face-up throughout: none of the
         // house-banked games in this mod have a hole card, and a face-down card the player can
         // never turn over just reads as a bug.
-        public static bool Place(Controller c, int seat, bool toDealer, Card card)
+        public static bool Place(Controller c, int seat, bool toDealer, Card card, int row = 0)
         {
             var bj = c?.TryCast<Bj>();
             if (bj == null) return false;
@@ -241,10 +240,11 @@ namespace CasinoExpansion.Casino
                 var playing = NextCardObject(bj);
                 if (playing == null) { MelonLogger.Warning("[cards] no free card object left"); return false; }
 
-                var slot = Slot(bj, seat, toDealer, out int overflow);
+                var slot = Slot(bj, seat, toDealer, row, out int overflow);
                 if (slot == null) { MelonLogger.Warning("[cards] no card position free"); return false; }
 
                 var target = slot.position + (overflow > 0 ? Step(bj, seat, toDealer) * overflow : Vector3.zero);
+                if (row > 0) target += RowOffset(bj, seat, toDealer) * row;
 
                 playing.SetCard(Suit(card), Value(card.Rank), true);
                 playing.SetFaceUp(true, true);
@@ -274,7 +274,6 @@ namespace CasinoExpansion.Casino
         // The table owns a fixed pool of card objects. Handing them out in order, and resetting
         // the counter each round, keeps a card from being dealt to two places at once.
         private static int _nextCard;
-        private static int _playerSlot, _dealerSlot;
 
         private static PlayingCard NextCardObject(Bj bj)
         {
@@ -288,18 +287,41 @@ namespace CasinoExpansion.Casino
         // out six positions per seat, which is plenty for blackjack and nowhere near enough for
         // Pai Gow's seven-card hand plus the dealer's -- past the sixth, every card used to
         // land on the sixth and pile up.
-        private static Transform Slot(Bj bj, int seat, bool toDealer, out int overflow)
+        // Counted per row, not per side: hands are dealt round-robin, so a shared counter would
+        // interleave Pai Gow's five-card and two-card hands into one another's positions.
+        private static readonly Dictionary<int, int> Used = new Dictionary<int, int>();
+
+        private static Transform Slot(Bj bj, int seat, bool toDealer, int row, out int overflow)
         {
             overflow = 0;
 
             var slots = toDealer ? bj.DealerCardPositions : bj.GetPlayerCardPositions(seat);
             if (slots == null || slots.Length == 0) return null;
 
-            int i = toDealer ? _dealerSlot++ : _playerSlot++;
+            int key = (toDealer ? 1000 : 0) + row;
+            int i = Used.TryGetValue(key, out var n) ? n : 0;
+            Used[key] = i + 1;
+
             if (i < slots.Length) return slots[i];
 
             overflow = i - slots.Length + 1;
             return slots[slots.Length - 1];
+        }
+
+        // Where a second hand for the same side goes. Pai Gow sets a five-card hand and a
+        // two-card hand, and a real table lays them in front of one another rather than in one
+        // long line -- so the extra row steps toward the dealer, away from the player.
+        private static Vector3 RowOffset(Bj bj, int seat, bool toDealer)
+        {
+            var mine = toDealer ? bj.DealerCardPositions : bj.GetPlayerCardPositions(seat);
+            var theirs = toDealer ? bj.GetPlayerCardPositions(seat) : bj.DealerCardPositions;
+
+            if (mine == null || mine.Length == 0 || theirs == null || theirs.Length == 0)
+                return new Vector3(0f, 0f, 0.1f);
+
+            var toward = theirs[0].position - mine[0].position;
+            toward.y = 0f;
+            return toward.normalized * 0.11f;
         }
 
         // The gap between the first two positions, reused to carry an overflowing row onwards
@@ -309,6 +331,22 @@ namespace CasinoExpansion.Casino
             var slots = toDealer ? bj.DealerCardPositions : bj.GetPlayerCardPositions(seat);
             if (slots == null || slots.Length < 2) return new Vector3(0.06f, 0f, 0f);
             return slots[1].position - slots[0].position;
+        }
+
+        // A hand belongs to the dealer if it is named for the banker -- "Banker low" included,
+        // so Pai Gow's two dealer hands both land on the dealer's side.
+        public static bool IsDealerHand(string name) =>
+            name != null && (name.StartsWith(DealerHand, StringComparison.OrdinalIgnoreCase)
+                          || name.StartsWith("Dealer", StringComparison.OrdinalIgnoreCase));
+
+        // Which row a hand occupies: the first hand on each side is row 0, the next is row 1.
+        private static int RowFor(HandSet hands, int index)
+        {
+            bool dealer = IsDealerHand(hands.Hands[index].Name);
+            int row = 0;
+            for (int i = 0; i < index; i++)
+                if (IsDealerHand(hands.Hands[i].Name) == dealer) row++;
+            return row;
         }
 
         // Deals the whole set in the order a dealer would: one to each hand, then round again,
@@ -330,10 +368,9 @@ namespace CasinoExpansion.Casino
                     if (from != null && hi < from.Length && round < from[hi]) continue;
                     if (round >= hand.Cards.Count) continue;
 
-                    bool dealer = string.Equals(hand.Name, DealerHand, StringComparison.OrdinalIgnoreCase)
-                               || string.Equals(hand.Name, "Dealer", StringComparison.OrdinalIgnoreCase);
+                    bool dealer = IsDealerHand(hand.Name);
 
-                    Place(c, seat, dealer, hand.Cards[round]);
+                    Place(c, seat, dealer, hand.Cards[round], RowFor(hands, hi));
                     yield return new WaitForSeconds(gap);
                 }
             }

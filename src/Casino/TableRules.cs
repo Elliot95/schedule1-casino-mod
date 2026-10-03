@@ -58,7 +58,7 @@ namespace CasinoExpansion.Casino
                 "<b>Pai Gow Poker</b>",
                 "Seven cards, split into five and two.",
                 "The five must outrank the two.",
-                "Both hands set the house way.",
+                "You choose the two in front.",
                 "Win both to win, less 5%.",
                 "One each is a push.",
             },
