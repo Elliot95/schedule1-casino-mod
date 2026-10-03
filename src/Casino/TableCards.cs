@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using MelonLoader;
 using UnityEngine;
 using CasinoExpansion.Core;
@@ -57,11 +58,39 @@ namespace CasinoExpansion.Casino
         {
             var bj = c?.TryCast<Bj>();
             if (bj == null) return;
+
+            RememberHomes(bj);
             _nextCard = 0;
             _playerSlot = 0;
             _dealerSlot = 0;
 
-            try { bj.ResetCards(); }
+            try
+            {
+                bj.ResetCards();
+
+                // ResetCards on its own left the last round's cards on the felt, so each hand
+                // dealt on top of the one before. Clearing each object's face and parking it
+                // back where the deck sits is what actually empties the table.
+                var pool = bj.Cards;
+                if (pool != null)
+                    for (int i = 0; i < pool.Length; i++)
+                    {
+                        var card = pool[i];
+                        if (card == null) continue;
+
+                        card.ClearCard();
+                        card.SetFaceUp(false, false);
+
+                        // Blanking the face is not enough -- the object stays lying on the
+                        // felt. Each card is put back where it sat before the first deal,
+                        // which is the deck.
+                        if (Home.TryGetValue(card.GetInstanceID(), out var home))
+                        {
+                            card.transform.position = home.Item1;
+                            card.transform.rotation = home.Item2;
+                        }
+                    }
+            }
             catch (Exception e) { MelonLogger.Warning($"[cards] reset failed: {e.Message}"); }
         }
 
@@ -75,6 +104,27 @@ namespace CasinoExpansion.Casino
         // Every seated player is added on every client. The call is the RpcLogic body, so each
         // client builds the same round locally rather than relying on an RPC that an unowned
         // client cannot send.
+        // Where each card object sits before anything is dealt -- the deck. Captured once per
+        // session, and only ever read, so a card can always be put back.
+        private static readonly Dictionary<int, Tuple<Vector3, Quaternion>> Home =
+            new Dictionary<int, Tuple<Vector3, Quaternion>>();
+
+        private static void RememberHomes(Bj bj)
+        {
+            var pool = bj.Cards;
+            if (pool == null) return;
+
+            for (int i = 0; i < pool.Length; i++)
+            {
+                var card = pool[i];
+                if (card == null) continue;
+
+                int id = card.GetInstanceID();
+                if (!Home.ContainsKey(id))
+                    Home[id] = Tuple.Create(card.transform.position, card.transform.rotation);
+            }
+        }
+
         public static void BeginRound(Controller c)
         {
             var bj = c?.TryCast<Bj>();
@@ -191,8 +241,10 @@ namespace CasinoExpansion.Casino
                 var playing = NextCardObject(bj);
                 if (playing == null) { MelonLogger.Warning("[cards] no free card object left"); return false; }
 
-                var slot = Slot(bj, seat, toDealer);
+                var slot = Slot(bj, seat, toDealer, out int overflow);
                 if (slot == null) { MelonLogger.Warning("[cards] no card position free"); return false; }
+
+                var target = slot.position + (overflow > 0 ? Step(bj, seat, toDealer) * overflow : Vector3.zero);
 
                 playing.SetCard(Suit(card), Value(card.Rank), true);
                 playing.SetFaceUp(true, true);
@@ -202,13 +254,13 @@ namespace CasinoExpansion.Casino
                 // placement -- presumably because it expects bookkeeping that only its own
                 // StartGame does, and StartGame is the thing this mod suppresses. The card
                 // positions are readable, so the glide the table would have done is done here.
-                playing.GlideTo(slot.position, slot.rotation, 0.35f, true);
+                playing.GlideTo(target, slot.rotation, 0.35f, true);
 
                 if (_traced < 4)
                 {
                     _traced++;
                     MelonLogger.Msg($"[cards] {card} id='{playing.CardID}' " +
-                                    $"{(toDealer ? "dealer" : $"seat {seat}")} -> {slot.name} at {slot.position}");
+                                    $"{(toDealer ? "dealer" : $"seat {seat}")} -> {target} (overflow {overflow})");
                 }
                 return true;
             }
@@ -232,13 +284,31 @@ namespace CasinoExpansion.Casino
             return pool[_nextCard++];
         }
 
-        private static Transform Slot(Bj bj, int seat, bool toDealer)
+        // Where the next card goes, and how far past the end of the row it is. The table lays
+        // out six positions per seat, which is plenty for blackjack and nowhere near enough for
+        // Pai Gow's seven-card hand plus the dealer's -- past the sixth, every card used to
+        // land on the sixth and pile up.
+        private static Transform Slot(Bj bj, int seat, bool toDealer, out int overflow)
         {
+            overflow = 0;
+
             var slots = toDealer ? bj.DealerCardPositions : bj.GetPlayerCardPositions(seat);
             if (slots == null || slots.Length == 0) return null;
 
             int i = toDealer ? _dealerSlot++ : _playerSlot++;
-            return slots[Mathf.Min(i, slots.Length - 1)];
+            if (i < slots.Length) return slots[i];
+
+            overflow = i - slots.Length + 1;
+            return slots[slots.Length - 1];
+        }
+
+        // The gap between the first two positions, reused to carry an overflowing row onwards
+        // in the direction the table already lays cards out.
+        private static Vector3 Step(Bj bj, int seat, bool toDealer)
+        {
+            var slots = toDealer ? bj.DealerCardPositions : bj.GetPlayerCardPositions(seat);
+            if (slots == null || slots.Length < 2) return new Vector3(0.06f, 0f, 0f);
+            return slots[1].position - slots[0].position;
         }
 
         // Deals the whole set in the order a dealer would: one to each hand, then round again,
