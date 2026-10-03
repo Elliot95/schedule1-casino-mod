@@ -11,8 +11,21 @@ Adds new games to Schedule I's casino. **Work in progress.**
 
 ## What's in it
 
+- **Eight table games**, picked at any casino table from a selector in the bet panel. Real cards are dealt onto the felt, and decisions are made at the table.
+
+  | Game | The decision | House edge |
+  |---|---|---|
+  | Blackjack (high roller) | Hit, stand, double, split without limit | ~0.5% |
+  | Ride the Bus (high roller) | Four guesses; cash out after any | ~5% |
+  | Baccarat | Which side to back | 1.2% / 1.1% / 14% |
+  | Casino Hold'em | Call twice the ante, or fold, on the flop | ~2.2% |
+  | Three Card Poker | Play or fold after three cards | ~3.4% |
+  | Pai Gow Poker | Which two cards to set in front | ~2.8% |
+  | Red Dog | Raise or stand on the spread | ~3.2% |
+  | House game | — the table's own, untouched | |
+
+- **Stakes to $50,000** on the mod games, with $1,000 nudges either side of the slider.
 - **Prize wheel** — spawns near you; a 53-slice wheel with a jackpot, tuned to stay under the slot machines' real return.
-- **Table games** — pick a game at any casino table from a selector in the bet panel. **Baccarat** is playable; the rest are listed but not yet implemented.
 - **Casino open 24/7** — vanilla opens it only between 16:00 and 05:00.
 - **Higher slot bets** — the ladder gains $200 and $300 tiers.
 
