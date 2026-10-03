@@ -1,6 +1,6 @@
 {
   "name": "CasinoExpansion",
-  "version_number": "0.3.0",
+  "version_number": "0.3.1",
   "website_url": "",
   "description": "Adds a prize wheel and eight selectable table games to the casino, with real cards dealt on the table.",
   "dependencies": [
